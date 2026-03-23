@@ -1,4 +1,5 @@
 const SETTINGS = {
+    guiaAnalise: 'dados',
     atividades: { produtiva: "01", troca_turno: "10", recolhe: "11" },
     cells: {
         codProg: "B4",

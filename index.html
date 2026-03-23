@@ -1,52 +1,140 @@
 <!DOCTYPE html>
-<html>
+<html data-bs-theme="dark">
 <head>
     <title>Conversor OSO</title>
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="static/bootstrap.min.css">
+    <link rel="stylesheet" href="static/bs_icons/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="static/app.css">
+</head>
+<body>
+    <h3 class="text-bg-primary-matte p-2 m-0"><span class="text-secondary">Praxio:</span> <span class="">Importar Planejamento</span></h3>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col">
+                <div class="p-2 text-bg-primary-matte hl-info rounded-end my-3">
+                    <p class="m-0"><b>Utilização:</b> Carregar arquivo <code>xlsx</code> pre-formatado e configurado, selecionar tipo de exportação (txt ou csv)</p>
+                    <p class="m-0"><b>Dica:</b> <span class="badge text-bg-warning-matte">ALT+K</span> exibe atalhos disponíveis na página</p>
+                    <hr class="my-2">
+                    <p class="m-0"><b class="text-danger-matte">Atenção:</b> Antes de importar é necessário ter configurado previamente o módulo de escala no Globus em <code class="ms-1">Utilitários / Configurações / Configurações de Importação</code></p>
+                </div>
+            </div>
+        </div>
+        <div class="row g-2">
+            <div class="col">
+                <input type="file" id="fileInput" class="form-control" accept=".xlsx" />
+            </div>
+            <div class="col">
+                <select id="formatSelect" class="form-select">
+                    <option value="txt">Exportar TXT</option>
+                    <option value="csv">Exportar CSV</option>
+                </select>
+            </div>
+            <div class="col"><button onclick="handleProcess()" class="btn btn-primary-matte">Processar</button></div>
+        </div>
+        <hr class="my-4">
+        <div class="p-2 text-bg-warning-matte hl-warning rounded-end my-3">
+            <b>Configurações da engine:</b>
+            <p class="m-0 small"><i class="bi bi-exclamation-triangle-fill text-danger-matte me-1"></i><b class="me-1 text-danger-matte">Atenção:</b> Alterar estes arquivos pode corromper a lógica do app, ajuste com cautela.</p>
+            <hr class="my-2">
+            <table class="table table-sm caption-top">
+                <caption class="p-0 small">Arquivos do motor de conversão</caption>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="fit pe-5"><code>settings.js</code></td>
+                        <td>Arquivo principal de configurações, ver detalhes mais abaixo</td>
+                    </tr>
+                    <tr>
+                        <td class="fit pe-5"><code>engine.js</code></td>
+                        <td>Motor de processamento</td>
+                    </tr>
+                    <tr>
+                        <td class="fit pe-5"><code>export.js</code></td>
+                        <td>Exportador de arquivo</td>
+                    </tr>
+                </tbody>
+            </table>
+            <h5 class="mb-1">settings.js</h5>
+            <div class="row">
+                <div class="col col-1"><code>guiaAnalise</code>:</div><div class="col-11">Nome da "guia" do arquivo a ser tratada pelo engine</div>
+                <div class="col col-1"><code>atividades</code>:</div><div class="col-11">Códigos do módulo de escala para tipo de viagem (produtiva, troca turno, recolhe)</div>
+                <div class="col col-1"><code>cells</code>:</div><div class="col-11">Células de referência na planilha para dados de importação (nome planejamento, cod linha, tempos de acesso / recolhida, etc)</div>
+                <div class="col col-1"><code>layout</code>:</div><div class="col-11">Dicionário com layout definido para arquivos de importação</div>
+            </div>
+            <hr>
+            <div class="row">
+                <div class="col col-12">Cada entrada no array de layout representa um dado no arquivo de exportação, ex:</div>
+                <div class="col col-12"><div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "COD_PROG", size: 7, pad: " ", align: "L", resolve: (ctx) => ctx.global.codProg }</code></div></div>
+                <div class="col col-1"><code>field:</code></div><div class="col-11">Nome no campo (csv)</div>
+                <div class="col col-1"><code>size:</code></div><div class="col-11">Tamanho mínimo (caracteres) a ser ocupado nos arquivos de exportação</div>
+                <div class="col col-1"><code>pad:</code></div><div class="col-11">String a ser usada para completar retorno compativel com tamanho definido</div>
+                <div class="col col-1"><code>align:</code></div><div class="col-11">Define se complemento será aplicado no inicio <code>R</code> ou no fim <code>L</code> do retorno</div>
+                <div class="col col-1"><code>resolve:</code></div><div class="col-11">Função (ou string) a ser usado no campo</div>
+                <hr>
+                <div class="col-12">Resolve pode fazer referência a uma entrada de contexto do engine <code>ctx.suaFuncao</code> ou uma função simples, exemplos:</div>
+                <div class="col col-12">
+                    <div class="mt-2 small">Exemplo 1 - Conteúdo Fixo</div>
+                    <div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "FOO", size: 3, pad: "0", align: "L", resolve: (ctx) => "BAR" }</code></div>
+                </div>
+                <div class="col col-12">
+                    <div class="mt-2 small">Exemplo 2 - Função de contexto</div>
+                    <div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "FEI", size: 3, pad: "0", align: "L", resolve: (ctx) => ctx.global.feiFunction }</code></div>
+                    <small>Neste caso deve ser criado a função <code>feiFunction</code> no arquivo de <code>engine.js</code></small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
     <script src="settings.js"></script>
     <script src="export.js"></script>
     <script src="engine.js"></script>
-</head>
-<body>
-    <h2>Processador de Transporte</h2>
-    <input type="file" id="fileInput" accept=".xlsx" />
-    
-    <select id="formatSelect">
-        <option value="txt">Exportar TXT</option>
-        <option value="csv">Exportar CSV</option>
-        <option value="ambos">Ambos</option>
-    </select>
-
-    <button onclick="handleProcess()">Processar e Baixar</button>
+    <script src="static/sheetjs.js"></script>
+    <script src="static/bootstrap.bundle.min.js"></script>
+    <script src="static/app.js"></script>
+    <script src="static/keywatch.js"></script>
 
     <script>
-    async function handleProcess() {
-        const fileInput = document.getElementById('fileInput');
-        if (!fileInput.files[0]) return alert("Selecione um arquivo!");
+        const appKeyMap = new Keywatch({});
+        appKeyMap.bind('alt+l', ()=>{
+            location.reload();
+        }, {
+            icon: 'bi bi-arrow-clockwise me-2',
+            desc: 'Limpa e recarrega página'
+        });
 
-        const format = document.getElementById('formatSelect').value;
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
+        async function handleProcess() {
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files[0]) return alert("Selecione um arquivo!");
             
-            try {
-                const results = Engine.process(workbook);
-
-                if (format === 'txt' || format === 'ambos') {
-                    Exporter.download(Exporter.toTXT(results), 'import.txt', 'text/plain');
+            const format = document.getElementById('formatSelect').value;
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                
+                try {
+                    const results = Engine.process(workbook);
+                    
+                    if (format === 'txt') {
+                        Exporter.download(Exporter.toTXT(results), 'import.txt', 'text/plain');
+                    }
+                    if (format === 'csv') {
+                        Exporter.download(Exporter.toCSV(results), 'import.csv', 'text/csv');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    appAlert('danger', `<b>Erro</b> ao processar arquivo:<hr><code>${err.message}</code>`, false);
                 }
-                if (format === 'csv' || format === 'ambos') {
-                    Exporter.download(Exporter.toCSV(results), 'import.csv', 'text/csv');
-                }
-            } catch (err) {
-                console.error(err);
-                alert("Erro ao processar: " + err.message);
-            }
-        };
-        reader.readAsArrayBuffer(fileInput.files[0]);
-    }
+            };
+            reader.readAsArrayBuffer(fileInput.files[0]);
+        }
     </script>
 </body>
 </html>

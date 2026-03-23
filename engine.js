@@ -23,7 +23,8 @@ const Engine = {
     },
 
     process: (workbook) => {
-        const sheet = workbook.Sheets["oso"];
+        // const sheet = workbook.Sheets["oso"];
+        const sheet = workbook.Sheets[SETTINGS.guiaAnalise];
         const data = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
 
         // 1. Contexto Global (Parâmetros fixos)
@@ -95,10 +96,10 @@ const Engine = {
         return allRows;
     },
 
-    // A "PONTE": Aplica as funções de resolve do settings.js
+    // Aplica as funções de resolve do settings.js
     applyLayout: (trips, tabEndMin, isLast, global, tabStartMin, tabName, isFirst, carIda, carVolta) => {
         const horaCorteMin = global.cutOffMin;
-        
+        foo - 5;
         // Define o turno da tabela (1, 2 ou 3 para dupla pegada)
         let turn = 1;
         if (String(tabName).endsWith("C")) {
