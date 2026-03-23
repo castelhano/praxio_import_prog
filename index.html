@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Conversor OSO</title>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="settings.js"></script>
+    <script src="export.js"></script>
+    <script src="engine.js"></script>
+</head>
+<body>
+    <h2>Processador de Transporte</h2>
+    <input type="file" id="fileInput" accept=".xlsx" />
+    
+    <select id="formatSelect">
+        <option value="txt">Exportar TXT</option>
+        <option value="csv">Exportar CSV</option>
+        <option value="ambos">Ambos</option>
+    </select>
+
+    <button onclick="handleProcess()">Processar e Baixar</button>
+
+    <script>
+    async function handleProcess() {
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files[0]) return alert("Selecione um arquivo!");
+
+        const format = document.getElementById('formatSelect').value;
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            
+            try {
+                const results = Engine.process(workbook);
+
+                if (format === 'txt' || format === 'ambos') {
+                    Exporter.download(Exporter.toTXT(results), 'import.txt', 'text/plain');
+                }
+                if (format === 'csv' || format === 'ambos') {
+                    Exporter.download(Exporter.toCSV(results), 'import.csv', 'text/csv');
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Erro ao processar: " + err.message);
+            }
+        };
+        reader.readAsArrayBuffer(fileInput.files[0]);
+    }
+    </script>
+</body>
+</html>
