@@ -2,16 +2,26 @@ const SETTINGS = {
     guiaAnalise: 'dados',
     atividades: { produtiva: "01", troca_turno: "10", recolhe: "11" },
     cells: {
-        codProg: "B4",
-        codLinha: "B5",
-        codIda: "B6",
-        codVolta: "B7",
-        tempoPreparo: "B8",
-        tempoRecolhe: "B9",
-        horaCorteTurno: "B10",
-        primeiroCodViagem: "B11"
+        codProg: "B2",
+        codLinha: "B3",
+        codIda: "B4",
+        codVolta: "B5",
+        tempoPreparo: "B6",
+        tempoRecolhe: "B7",
+        horaCorteTurno: "B8",
+        primeiroCodViagem: "B9"
     },
-    // Alinhamento: "L" (Esquerda/Fim) ou "R" (Direita/Início)
+    viagensConf: {
+        intervaloGeral: "H4:AU28",
+        intervaloDuplaPegada: "B17:B35",
+        linhaCarroID: 1,
+        linhaSentido: 2,
+        linhaLocalidade: 3,
+        linhasTrocaTurno: [29, 30, 31],
+        intervaloExcecoesTipo: "C3:F15",
+        intervaloExcecoesLocal: "C18:F35",
+        ignoreKeywords: ["RECO", "INTERV"]
+    },
     layout: [
         { field: "COD_PROG", size: 7, pad: " ", align: "L", resolve: (ctx) => ctx.global.codProg },
         { field: "TAB",      size: 3, pad: " ", align: "L", resolve: (ctx) => ctx.trip.tab },

@@ -1,10 +1,20 @@
 const Engine = {
+    parseCoord: (coord) => {
+        if (!coord) return null;
+        const parts = coord.match(/([A-Z]+)(\d+)/);
+        if (!parts) return null;
+        const colStr = parts[1], rowStr = parts[2];
+        let col = 0;
+        for (let i = 0; i < colStr.length; i++) col = col * 26 + (colStr.charCodeAt(i) - 64);
+        return { row: parseInt(rowStr) - 1, col: col - 1 };
+    },
+
     toMin: (val) => {
         if (val === undefined || val === null || val === '') return null;
         if (typeof val === 'number') return Math.round(val * 24 * 60);
         if (typeof val === 'string') {
             const s = val.trim().toUpperCase();
-            if (s.includes('RECO') || s.includes('INTER') || !s.includes(':')) return null;
+            if (SETTINGS.viagensConf.ignoreKeywords.some(k => s.includes(k)) || !s.includes(':')) return null;
             const [h, m] = s.split(':').map(Number);
             return (h * 60) + m;
         }
@@ -13,21 +23,23 @@ const Engine = {
 
     minToTime: (m) => {
         if (m === null || isNaN(m)) return "00:00";
-        return `${Math.floor(m/60).toString().padStart(2,'0')}:${(m%60).toString().padStart(2,'0')}`;
+        let totalMins = Math.round(m);
+        const h = Math.floor(totalMins / 60);
+        const min = totalMins % 60;
+        return `${h.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
     },
 
     getCell: (matrix, coord) => {
-        const col = coord.charCodeAt(0) - 65;
-        const row = parseInt(coord.substring(1)) - 1;
-        return matrix[row] ? matrix[row][col] : null;
+        const pos = Engine.parseCoord(coord);
+        if (!pos) return null;
+        return matrix[pos.row] ? matrix[pos.row][pos.col] : null;
     },
 
     process: (workbook) => {
-        // const sheet = workbook.Sheets["oso"];
         const sheet = workbook.Sheets[SETTINGS.guiaAnalise];
         const data = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
+        const vConf = SETTINGS.viagensConf;
 
-        // 1. Contexto Global (Parâmetros fixos)
         const globalCtx = {
             codProg: Engine.getCell(data, SETTINGS.cells.codProg),
             codLinha: Engine.getCell(data, SETTINGS.cells.codLinha),
@@ -39,118 +51,170 @@ const Engine = {
             globalVolta: Engine.getCell(data, SETTINGS.cells.codVolta)
         };
 
-        const duplaPegadaSet = new Set();
-        for(let i=13; i<=27; i++) if(data[i] && data[i][1]) duplaPegadaSet.add(String(data[i][1]).trim());
+        // Carrega exceções apenas para viagens PRODUTIVAS
+        const carregarExcecoes = (intervaloStr) => {
+            const dict = {};
+            if (!intervaloStr) return dict;
+            const coords = intervaloStr.split(':').map(Engine.parseCoord);
+            for (let r = coords[0].row; r <= coords[1].row; r++) {
+                const carro = data[r]?.[coords[0].col];
+                const horaMin = Engine.toMin(data[r]?.[coords[0].col + 1]);
+                const sentido = String(data[r]?.[coords[0].col + 2] || "").toUpperCase();
+                const valor = data[r]?.[coords[0].col + 3];
+                if (carro && horaMin !== null && sentido) {
+                    dict[`${String(carro).padStart(2, '0')}_${horaMin}_${sentido}`] = String(valor).trim();
+                }
+            }
+            return dict;
+        };
 
+        const excecoes = {
+            tipo: carregarExcecoes(vConf.intervaloExcecoesTipo),
+            local: carregarExcecoes(vConf.intervaloExcecoesLocal)
+        };
+
+        const [dpS, dpE] = vConf.intervaloDuplaPegada.split(':').map(Engine.parseCoord);
+        const duplaPegadaSet = new Set();
+        for (let r = dpS.row; r <= dpE.row; r++) {
+            let val = data[r]?.[dpS.col];
+            if (val) duplaPegadaSet.add(String(val).trim());
+        }
+
+        const [vS, vE] = vConf.intervaloGeral.split(':').map(Engine.parseCoord);
         let allRows = [];
 
-        // 2. Extração por Carro
-        for (let c = 2; c <= 21; c += 2) {
-            let carroID = data[0] && data[0][c] ? String(data[0][c]).padStart(2, '0') : null;
-            if (!carroID || carroID === "00") continue;
+        for (let c = vS.col; c <= vE.col; c += 2) {
+            let carroIDRaw = data[vConf.linhaCarroID - 1]?.[c];
+            if (!carroIDRaw || carroIDRaw === "00" || carroIDRaw === 0) continue;
 
-            const carIda = data[2][c] || globalCtx.globalIda;
-            const carVolta = data[2][c+1] || globalCtx.globalVolta;
-            let trocas = [data[28][c], data[29][c], data[30][c], data[28][c+1], data[29][c+1], data[30][c+1]]
-                         .map(t => Engine.toMin(t)).filter(t => t !== null).sort((a,b) => a-b);
+            const carroID = String(carroIDRaw).padStart(2, '0');
+            const carIdaDef = data[vConf.linhaLocalidade - 1]?.[c] || globalCtx.globalIda;
+            const carVoltaDef = data[vConf.linhaLocalidade - 1]?.[c + 1] || globalCtx.globalVolta;
+            
+            let trocas = vConf.linhasTrocaTurno
+                .map(line => Engine.toMin(data[line - 1]?.[c]))
+                .filter(t => t !== null).sort((a, b) => a - b);
 
             let rawTrips = [];
-            for (let r = 3; r <= 27; r++) {
-                let mI = Engine.toMin(data[r][c]), mV = Engine.toMin(data[r][c+1]);
-                if (mI === null && mV === null) {
-                    if (String(data[r][c] || "").toUpperCase().includes("RECO")) break;
-                    continue;
-                }
-                if (mI !== null) rawTrips.push({ dir: "I", start: mI, end: mV || Engine.toMin(data[r+1]?.[c+1]) || mI });
-                if (mV !== null) rawTrips.push({ dir: "V", start: mV, end: Engine.toMin(data[r+1]?.[c]) || mV });
+            for (let r = vS.row; r <= vE.row; r++) {
+                [{ v: data[r]?.[c], d: "I" }, { v: data[r]?.[c+1], d: "V" }].forEach(item => {
+                    let m = Engine.toMin(item.v);
+                    if (m !== null) {
+                        const key = `${carroID}_${m}_${item.d}`;
+                        let end = (item.d === "I") 
+                            ? (Engine.toMin(data[r]?.[c+1]) || Engine.toMin(data[r+1]?.[c+1]) || m)
+                            : (Engine.toMin(data[r+1]?.[c]) || m);
+
+                        rawTrips.push({ 
+                            dir: item.d, start: m, end: end,
+                            overrideType: excecoes.tipo[key],
+                            overrideLocal: excecoes.local[key]
+                        });
+                    }
+                });
             }
-            if (!rawTrips.length) continue;
-            rawTrips.sort((a,b) => a.start - b.start);
 
-            // 3. Transformação usando o Layout Resolvers
+            if (rawTrips.length === 0) continue;
+            rawTrips.sort((a, b) => a.start - b.start);
+
             let tabIdx = 0, seq = globalCtx.firstSeq, currentRows = [];
-            let currentLetter = ["A", "B", "D", "E"];
             let tabStartMin = rawTrips[0].start;
-
-            const getTabName = (idx) => {
-                let letter = currentLetter[idx] || "Z";
-                return (letter === "B" && duplaPegadaSet.has(carroID + "C")) ? carroID + "C" : carroID + letter;
-            };
 
             for (let i = 0; i < rawTrips.length; i++) {
                 let trip = rawTrips[i];
-
-                // Lógica de Troca de Turno
+                
                 while (trocas.length > 0 && trip.start >= trocas[0]) {
-                    allRows.push(...Engine.applyLayout(currentRows, trocas[0], false, globalCtx, tabStartMin, getTabName(tabIdx), tabIdx === 0, carIda, carVolta));
-                    currentRows = []; trocas.shift(); tabIdx++; seq = globalCtx.firstSeq; tabStartMin = trip.start;
+                    const tabName = (tabIdx === 1 && duplaPegadaSet.has(carroID)) ? carroID + "C" : carroID + ["A", "B", "D", "E"][tabIdx];
+                    allRows.push(...Engine.applyLayout(currentRows, trocas[0], false, globalCtx, tabStartMin, tabName, tabIdx === 0, carIdaDef, carVoltaDef, carroID));
+                    currentRows = []; 
+                    tabStartMin = trip.start; 
+                    trocas.shift(); 
+                    tabIdx++; 
+                    seq = globalCtx.firstSeq; 
                 }
 
                 currentRows.push({ ...trip, seq: seq++ });
 
                 if (i === rawTrips.length - 1) {
-                    allRows.push(...Engine.applyLayout(currentRows, trip.end + globalCtx.recoMins, true, globalCtx, tabStartMin, getTabName(tabIdx), tabIdx === 0, carIda, carVolta));
+                    const tabName = (tabIdx === 1 && duplaPegadaSet.has(carroID)) ? carroID + "C" : carroID + ["A", "B", "D", "E"][tabIdx];
+                    allRows.push(...Engine.applyLayout(currentRows, trip.end + globalCtx.recoMins, true, globalCtx, tabStartMin, tabName, tabIdx === 0, carIdaDef, carVoltaDef, carroID));
                 }
             }
         }
         return allRows;
     },
 
-    // Aplica as funções de resolve do settings.js
-    applyLayout: (trips, tabEndMin, isLast, global, tabStartMin, tabName, isFirst, carIda, carVolta) => {
-        const horaCorteMin = global.cutOffMin;
-        foo - 5;
-        // Define o turno da tabela (1, 2 ou 3 para dupla pegada)
-        let turn = 1;
-        if (String(tabName).endsWith("C")) {
-            turn = 3;
-        } else if (tabStartMin >= horaCorteMin) {
-            turn = 2;
-        }
+    applyLayout: (trips, tabEndMin, isLast, global, tabStartMin, tabName, isFirst, carIdaDef, carVoltaDef, carroID) => {
+        if (trips.length === 0) return [];
 
-        // Criamos uma cópia das viagens e adicionamos UMA linha extra (Troca ou Recolhe)
-        const rowsToProcess = [...trips, { isExtra: true }];
+        let turn = String(tabName).endsWith("C") ? 3 : (tabStartMin >= global.cutOffMin ? 2 : 1);
+        const lastIndex = trips.length - 1;
+        const result = [];
 
-        return rowsToProcess.map((t, idx) => {
-            const isExtraRow = !!t.isExtra;
-            const lastTrip = trips[trips.length - 1];
+        trips.forEach((t, idx) => {
+            const isLastOfBlock = (idx === lastIndex);
 
-            // Montamos o contexto que o 'resolve' do settings.js vai ler
-            const tripCtx = {
-                tab: tabName,
-                turn: turn,
-                tabStart: Engine.minToTime(tabStartMin),
-                tabEnd: Engine.minToTime(tabEndMin),
-                garageStart: isFirst ? Engine.minToTime(tabStartMin - global.prepMins) : "00:00",
-                
-                // Se for a linha extra, repete os dados da última viagem mas muda atividade e horários
-                direction: isExtraRow ? lastTrip.dir : t.dir,
-                seq: isExtraRow ? (lastTrip.seq + 1) : t.seq,
-                departure: isExtraRow ? (isLast ? Engine.minToTime(lastTrip.end) : Engine.minToTime(tabEndMin)) : Engine.minToTime(t.start),
-                arrival: isExtraRow ? Engine.minToTime(tabEndMin) : Engine.minToTime(t.end),
-                
-                activity: isExtraRow 
-                    ? (isLast ? SETTINGS.atividades.recolhe : SETTINGS.atividades.troca_turno) 
-                    : SETTINGS.atividades.produtiva,
-                
-                localCode: (isExtraRow && isLast) ? "11" : ( (isExtraRow ? lastTrip.dir : t.dir) === "I" ? carIda : carVolta)
-            };
+            // Se for RECOLHIDA (isLast === true), a última viagem produtiva é convertida em 11
+            if (isLastOfBlock && isLast) {
+                const tripCtx = {
+                    tab: tabName, turn: turn,
+                    tabStart: Engine.minToTime(tabStartMin),
+                    tabEnd: Engine.minToTime(tabEndMin),
+                    garageStart: (isFirst && idx === 0) ? Engine.minToTime(tabStartMin - global.prepMins) : "00:00",
+                    direction: t.dir, // Mantém o sentido exato do Excel (Ex: V das 23:20)
+                    seq: t.seq,
+                    departure: Engine.minToTime(t.start),
+                    arrival: Engine.minToTime(tabEndMin),
+                    activity: SETTINGS.atividades.recolhe,
+                    localCode: "11"
+                };
+                result.push(Engine.finalize(tripCtx, global));
+            } 
+            // Casos normais e Troca de Turno
+            else {
+                const tripCtx = {
+                    tab: tabName, turn: turn,
+                    tabStart: Engine.minToTime(tabStartMin),
+                    tabEnd: Engine.minToTime(tabEndMin),
+                    garageStart: (isFirst && idx === 0) ? Engine.minToTime(tabStartMin - global.prepMins) : "00:00",
+                    direction: t.dir,
+                    seq: t.seq,
+                    departure: Engine.minToTime(t.start),
+                    arrival: Engine.minToTime(t.end),
+                    activity: t.overrideType || SETTINGS.atividades.produtiva,
+                    localCode: t.overrideLocal || (t.dir === "I" ? carIdaDef : carVoltaDef)
+                };
+                result.push(Engine.finalize(tripCtx, global));
 
-            // Aplica os Resolvers do Layout
-            const finalizedRow = {};
-            SETTINGS.layout.forEach(conf => {
-                if (typeof conf.resolve === 'function') {
-                    finalizedRow[conf.field] = conf.resolve({ 
-                        trip: tripCtx, 
-                        global: global, 
-                        helpers: Engine 
-                    });
-                } else {
-                    finalizedRow[conf.field] = tripCtx[conf.field] || "";
+                // Se for TROCA DE TURNO, insere a linha de 0 min após a produtiva
+                if (isLastOfBlock && !isLast) {
+                    const extraCtx = {
+                        tab: tabName, turn: turn,
+                        tabStart: Engine.minToTime(tabStartMin),
+                        tabEnd: Engine.minToTime(tabEndMin),
+                        garageStart: "00:00",
+                        direction: t.dir, // Mantém o sentido da última produtiva
+                        seq: t.seq + 1,
+                        departure: Engine.minToTime(tabEndMin),
+                        arrival: Engine.minToTime(tabEndMin),
+                        activity: SETTINGS.atividades.troca_turno,
+                        localCode: SETTINGS.atividades.troca_turno
+                    };
+                    result.push(Engine.finalize(extraCtx, global));
                 }
-            });
-
-            return finalizedRow;
+            }
         });
+
+        return result;
+    },
+
+    finalize: (tripCtx, global) => {
+        const finalizedRow = {};
+        SETTINGS.layout.forEach(conf => {
+            finalizedRow[conf.field] = (typeof conf.resolve === 'function') 
+                ? conf.resolve({ trip: tripCtx, global: global, helpers: Engine }) 
+                : (tripCtx[conf.field] || "");
+        });
+        return finalizedRow;
     }
 };
