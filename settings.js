@@ -1,5 +1,6 @@
 const SETTINGS = {
     guiaAnalise: 'dados',
+    preparo2aPegadaDP: false,
     atividades: { produtiva: "01", troca_turno: "10", recolhe: "11" },
     cells: {
         codProg: "B2",
@@ -7,19 +8,23 @@ const SETTINGS = {
         codIda: "B4",
         codVolta: "B5",
         tempoPreparo: "B6",
-        tempoRecolhe: "B7",
-        horaCorteTurno: "B8",
-        primeiroCodViagem: "B9"
+        tempoAcesso: "B7",
+        tempoRecolhe: "B8",
+        horaCorteTurno: "B9",
+        primeiroCodViagem: "B10"
     },
     viagensConf: {
         intervaloGeral: "H4:AU28",
-        intervaloDuplaPegada: "B17:B35",
+        intervaloDuplaPegada: "B17:B43",
         linhaCarroID: 1,
         linhaSentido: 2,
         linhaLocalidade: 3,
         linhasTrocaTurno: [29, 30, 31],
         intervaloExcecoesTipo: "C3:F15",
-        intervaloExcecoesLocal: "C18:F35",
+        intervaloExcecoesLocal: "C18:F30",
+        intervaloExcecoesLinha: "C33:F43",
+        intervaloExcecoesLinha: "C33:F43",
+        intervaloExcecoesOcioso: "A46:H62",
         ignoreKeywords: ["RECO", "INTERV"]
     },
     layout: [
