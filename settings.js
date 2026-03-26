@@ -1,6 +1,7 @@
 const SETTINGS = {
     guiaAnalise: 'dados',
     preparo2aPegadaDP: false,
+    aplicarFormatacaoNoCsv: true,
     atividades: { produtiva: "01", troca_turno: "10", recolhe: "11" },
     cells: {
         codProg: "B2",

@@ -3,7 +3,6 @@ const Exporter = {
     formatField: (value, config) => {
         let s = String(value !== undefined && value !== null ? value : "");
         
-        // Tratamento de Horas (HH:mm)
         if (config.type === "hour" && s.includes(":")) {
             s = s.substring(0, 5);
         }
@@ -12,15 +11,12 @@ const Exporter = {
         const padChar = config.pad || " ";
         const align = (config.align || "L").toUpperCase();
 
-        // Se alinhar à Direita (R), preenche no início (padStart) -> ex: 0001
-        // Se alinhar à Esquerda (L), preenche no fim (padEnd) -> ex: TAB  
         if (align === "R") {
             s = s.padStart(size, padChar);
         } else {
             s = s.padEnd(size, padChar);
         }
 
-        // Garante que o texto nunca ultrapasse o tamanho da coluna
         return s.substring(0, size);
     },
 
@@ -36,10 +32,14 @@ const Exporter = {
         // 1. Gera o cabeçalho usando os nomes dos campos
         const headers = SETTINGS.layout.map(c => c.field).join(";");
 
-        // 2. Gera o corpo formatando cada célula conforme as regras de Pad/Align/Type
+        // 2. Gera o corpo verificando a flag de formatação
         const body = processedData.map(row => {
             return SETTINGS.layout.map(conf => {
-                return Exporter.formatField(row[conf.field], conf);
+                // Se aplicarFormatacaoNoCsv for true, usa o formatField. 
+                // Caso contrário, retorna o valor original da linha.
+                return SETTINGS.aplicarFormatacaoNoCsv 
+                    ? Exporter.formatField(row[conf.field], conf)
+                    : row[conf.field];
             }).join(";");
         }).join("\n");
 
