@@ -11,7 +11,8 @@ const SETTINGS = {
         tempoAcesso: "B7",
         tempoRecolhe: "B8",
         horaCorteTurno: "B9",
-        primeiroCodViagem: "B10"
+        primeiroCodViagem: "B10",
+        codLocalPegada: "B11",
     },
     viagensConf: {
         intervaloGeral: "H4:AU28",
@@ -23,23 +24,24 @@ const SETTINGS = {
         intervaloExcecoesTipo: "C3:F15",
         intervaloExcecoesLocal: "C18:F30",
         intervaloExcecoesLinha: "C33:F43",
-        intervaloExcecoesLinha: "C33:F43",
         intervaloExcecoesOcioso: "A46:H62",
         ignoreKeywords: ["RECO", "INTERV"]
     },
     layout: [
-        { field: "COD_PROG", size: 7, pad: " ", align: "L", resolve: (ctx) => ctx.global.codProg },
-        { field: "TAB",      size: 3, pad: " ", align: "L", resolve: (ctx) => ctx.trip.tab },
-        { field: "TURN",     size: 1, pad: " ", align: "L", resolve: (ctx) => ctx.trip.turn },
-        { field: "INICIO",   size: 5, pad: " ", align: "L", type: "hour", resolve: (ctx) => ctx.trip.tabStart },
-        { field: "TERM",     size: 5, pad: " ", align: "L", type: "hour", resolve: (ctx) => ctx.trip.tabEnd },
-        { field: "INIC_GAR", size: 5, pad: " ", align: "L", type: "hour", resolve: (ctx) => ctx.trip.garageStart },
-        { field: "SENTIDO",  size: 1, pad: " ", align: "L", resolve: (ctx) => ctx.trip.direction },
-        { field: "COD",      size: 2, pad: "0", align: "R", resolve: (ctx) => ctx.trip.seq },
-        { field: "SAIDA",    size: 5, pad: " ", align: "L", type: "hour", resolve: (ctx) => ctx.trip.departure },
-        { field: "CHEGADA",  size: 5, pad: " ", align: "L", type: "hour", resolve: (ctx) => ctx.trip.arrival },
-        { field: "ATIV",     size: 2, pad: "0", align: "R", resolve: (ctx) => ctx.trip.activity },
-        { field: "COD_LOCAL",size: 3, pad: "0", align: "R", resolve: (ctx) => ctx.trip.localCode },
-        { field: "COD_LINHA",size: 3, pad: "0", align: "R", resolve: (ctx) => ctx.global.codLinha }
+        { field: "COD_PROG",   size: 7, pad: " ", align: "L", resolve: (ctx) => ctx.global.codProg },
+        { field: "TAB",        size: 3, pad: " ", align: "L", resolve: (ctx) => ctx.trip.tab },
+        { field: "TURN",       size: 1, pad: " ", align: "L", resolve: (ctx) => ctx.trip.turn },
+        { field: "INICIO",     size: 5, pad: " ", align: "L", type: "hour", resolve: (ctx) => ctx.trip.tabStart },
+        { field: "TERM",       size: 5, pad: " ", align: "L", type: "hour", resolve: (ctx) => ctx.trip.tabEnd },
+        { field: "COD_PEGADA", size: 5, pad: "0", align: "R", resolve: (ctx) => ctx.trip.pegada },
+        { field: "PREPARO",    size: 2, pad: "0", align: "R", resolve: (ctx) => ctx.trip.preparo },
+        { field: "INIC_GAR",   size: 5, pad: " ", align: "L", type: "hour", resolve: (ctx) => ctx.trip.garageStart },
+        { field: "SENTIDO",    size: 1, pad: " ", align: "L", resolve: (ctx) => ctx.trip.direction },
+        { field: "COD",        size: 2, pad: "0", align: "R", resolve: (ctx) => ctx.trip.seq },
+        { field: "SAIDA",      size: 5, pad: " ", align: "L", type: "hour", resolve: (ctx) => ctx.trip.departure },
+        { field: "CHEGADA",    size: 5, pad: " ", align: "L", type: "hour", resolve: (ctx) => ctx.trip.arrival },
+        { field: "ATIV",       size: 2, pad: "0", align: "R", resolve: (ctx) => ctx.trip.activity },
+        { field: "COD_LOCAL",  size: 5, pad: "0", align: "R", resolve: (ctx) => ctx.trip.localCode },
+        // { field: "COD_LINHA",  size: 3, pad: "0", align: "R", resolve: (ctx) => ctx.global.codLinha }
     ]
 };
