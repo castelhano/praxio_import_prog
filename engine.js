@@ -1,5 +1,4 @@
 const Engine = {
-    // ... (parseCoord, toMin, minToTime, getCell permanecem iguais)
     parseCoord: (coord) => {
         if (!coord) return null;
         const parts = coord.match(/([A-Z]+)(\d+)/);
@@ -12,253 +11,168 @@ const Engine = {
 
     toMin: (val) => {
         if (val === undefined || val === null || val === '') return null;
-        if (typeof val === 'number') {
-            return val >= 1 ? Math.round(val) : Math.round(val * 24 * 60);
-        }
-        if (typeof val === 'string') {
-            const s = val.trim().toUpperCase();
-            if (SETTINGS.viagensConf.ignoreKeywords.some(k => s.includes(k)) || !s.includes(':')) {
-                return isNaN(s) ? null : parseInt(s);
-            }
-            const [h, m] = s.split(':').map(Number);
-            return (h * 60) + m;
-        }
-        return null;
+        if (typeof val === 'number') return val >= 1 ? Math.round(val) : Math.round(val * 1440);
+        const s = String(val).trim().toUpperCase();
+        if (!s.includes(':')) return null;
+        const [h, m] = s.split(':').map(Number);
+        return (h * 60) + m;
     },
 
-    minToTime: (m) => {
-        if (m === null || isNaN(m)) return "00:00";
-        let totalMins = Math.max(0, Math.round(m));
-        const h = Math.floor(totalMins / 60);
-        const min = totalMins % 60;
-        return `${h.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+    minToTime: (min) => {
+        if (min === null || min === undefined) return "";
+        const h = Math.floor(min / 60).toString().padStart(2, '0');
+        const m = (min % 60).toString().padStart(2, '0');
+        return `${h}:${m}`;
     },
 
-    getCell: (matrix, coord) => {
-        const pos = Engine.parseCoord(coord);
-        if (!pos) return null;
-        return matrix[pos.row] ? matrix[pos.row][pos.col] : null;
+    // Filtro Dinâmico: Se o campo na exceção estiver vazio, ele ignora o critério (valida todos)
+    getExcecao: (viagem, excecoes) => {
+        return excecoes.find(exc => {
+            const matchCarro = !exc.carro || String(exc.carro) === String(viagem.carro);
+            const matchHora = !exc.viagem || Engine.toMin(exc.viagem) === viagem.start;
+            const matchSentido = !exc.sentido || exc.sentido === viagem.direction;
+            const matchTipo = !exc.tipo || exc.tipo === viagem.tipoInterno; // P ou O
+            return matchCarro && matchHora && matchSentido && matchTipo;
+        });
     },
 
-    process: (workbook) => {
-        const sheet = workbook.Sheets[SETTINGS.guiaAnalise];
-        const data = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
-        const vConf = SETTINGS.viagensConf;
+    process: (sheetData) => {
+        const range = Engine.parseCoord(SETTINGS.viagensConf.intervaloGeral.split(':')[0]);
+        const endRange = Engine.parseCoord(SETTINGS.viagensConf.intervaloGeral.split(':')[1]);
 
-        const globalCtx = {
-            codProg: Engine.getCell(data, SETTINGS.cells.codProg),
-            codLinha: Engine.getCell(data, SETTINGS.cells.codLinha),
-            prepMins: Engine.toMin(Engine.getCell(data, SETTINGS.cells.tempoPreparo)) || 0,
-            acesMins: Engine.toMin(Engine.getCell(data, SETTINGS.cells.tempoAcesso)) || 0,
-            recoMins: Engine.toMin(Engine.getCell(data, SETTINGS.cells.tempoRecolhe)) || 0,
-            cutOffMin: Engine.toMin(Engine.getCell(data, SETTINGS.cells.horaCorteTurno)),
-            firstSeq: parseInt(Engine.getCell(data, SETTINGS.cells.primeiroCodViagem) || 1),
-            globalIda: Engine.getCell(data, SETTINGS.cells.codIda),
-            globalVolta: Engine.getCell(data, SETTINGS.cells.codVolta),
-            codLocalPegada: Engine.getCell(data, SETTINGS.cells.codLocalPegada) || "0",
+        // DEBUG INTERNO: Verifique se estas coordenadas batem com a V4
+        const cp = Engine.parseCoord(SETTINGS.cells.codProg);
+        const cl = Engine.parseCoord(SETTINGS.cells.codLinha);
+
+        const global = {
+            codProg: sheetData[cp.row]?.[cp.col] || "",
+            codLinha: sheetData[cl.row]?.[cl.col] || "",
+            // codProg: sheetData[Engine.parseCoord(SETTINGS.cells.codProg).row][Engine.parseCoord(SETTINGS.cells.codProg).col],
+            // codLinha: sheetData[Engine.parseCoord(SETTINGS.cells.codLinha).row][Engine.parseCoord(SETTINGS.cells.codLinha).col],
+            tempoAcesso: Engine.toMin(sheetData[Engine.parseCoord(SETTINGS.cells.tempoAcesso).row][Engine.parseCoord(SETTINGS.cells.tempoAcesso).col]) || 0
         };
 
-        const [dpS, dpE] = vConf.intervaloDuplaPegada.split(':').map(Engine.parseCoord);
-        const duplaPegadaSet = new Set();
-        for (let r = dpS.row; r <= dpE.row; r++) {
-            let val = data[r]?.[dpS.col];
-            if (val) duplaPegadaSet.add(String(val).trim().toUpperCase());
-        }
-
-        const carregarOcioso = (intervaloStr) => {
-            const dict = {};
-            if (!intervaloStr) return dict;
-            const coords = intervaloStr.split(':').map(Engine.parseCoord);
-            for (let r = coords[0].row; r <= coords[1].row; r++) {
-                const carro = String(data[r]?.[coords[0].col] || "").padStart(2, '0');
-                const horaMin = Engine.toMin(data[r]?.[coords[0].col + 1]);
-                const sentido = String(data[r]?.[coords[0].col + 2] || "").toUpperCase();
-                if (carro !== "00" && horaMin !== null && sentido) {
-                    dict[`${carro}_${horaMin}_${sentido}`] = {
-                        atividade: data[r]?.[coords[0].col + 3],
-                        local: data[r]?.[coords[0].col + 4],
-                        recolhe: Engine.toMin(data[r]?.[coords[0].col + 7])
-                    };
+        // 1. Carregar Tabela de Exceções Unificada (A35:J55)
+        const excCoord = Engine.parseCoord(SETTINGS.viagensConf.intervaloExcecoes);
+        const excecoes = [];
+        if (excCoord) {
+            for (let r = excCoord.row; r <= 54; r++) { 
+                if (sheetData[r] && sheetData[r][0]) {
+                    excecoes.push({
+                        carro: sheetData[r][0], 
+                        viagem: sheetData[r][1],
+                        sentido: sheetData[r][2],
+                        tipo: sheetData[r][3],
+                        novoTipo: sheetData[r][4],
+                        novoLocal: sheetData[r][5],
+                        novaLinha: sheetData[r][6]
+                    });
                 }
             }
-            return dict;
-        };
+        }
 
-        const carregarExcecoesSimples = (intervaloStr) => {
-            const dict = {};
-            if (!intervaloStr) return dict;
-            const coords = intervaloStr.split(':').map(Engine.parseCoord);
-            for (let r = coords[0].row; r <= coords[1].row; r++) {
-                const carro = String(data[r]?.[coords[0].col] || "").padStart(2, '0');
-                const horaMin = Engine.toMin(data[r]?.[coords[0].col + 1]);
-                const sentido = String(data[r]?.[coords[0].col + 2] || "").toUpperCase();
-                if (carro !== "00" && horaMin !== null && sentido) {
-                    dict[`${carro}_${horaMin}_${sentido}`] = data[r]?.[coords[0].col + 3];
-                }
-            }
-            return dict;
-        };
+        let finalRows = [];
 
-        const excecoes = {
-            tipo: carregarExcecoesSimples(vConf.intervaloExcecoesTipo),
-            local: carregarExcecoesSimples(vConf.intervaloExcecoesLocal),
-            linha: carregarExcecoesSimples(vConf.intervaloExcecoesLinha),
-            ocioso: carregarOcioso(vConf.intervaloExcecoesOcioso)
-        };
+        // 2. Processar colunas (Carros)
+        for (let c = range.col; c <= endRange.col; c++) {
+            const carroID = sheetData[range.row + SETTINGS.viagensConf.linhaCarroID - 1][c];
+            if (!carroID) continue;
 
-        const [vS, vE] = vConf.intervaloGeral.split(':').map(Engine.parseCoord);
-        let allRows = [];
+            let viagensDoCarro = [];
 
-        for (let c = vS.col; c <= vE.col; c += 2) {
-            let carroIDRaw = data[vConf.linhaCarroID - 1]?.[c];
-            if (!carroIDRaw || carroIDRaw === "00" || carroIDRaw === 0) continue;
+            // Identificar eventos por continuidade
+            for (let r = range.row + 3; r <= endRange.row; r++) {
+                const valorSaida = sheetData[r][c];
+                const minSaida = Engine.toMin(valorSaida);
+                const isTrocaForcada = SETTINGS.viagensConf.linhasTrocaTurno.includes(r + 1);
 
-            const carroID = String(carroIDRaw).padStart(2, '0');
-            const carIdaDef = data[vConf.linhaLocalidade - 1]?.[c] || globalCtx.globalIda;
-            const carVoltaDef = data[vConf.linhaLocalidade - 1]?.[c + 1] || globalCtx.globalVolta;
-            
-            let trocas = vConf.linhasTrocaTurno
-                .map(line => ({
-                    min: Engine.toMin(data[line - 1]?.[c]),
-                    sentido: (c % 2 === vS.col % 2) ? "I" : "V"
-                }))
-                .filter(t => t.min !== null).sort((a, b) => a.min - b.min);
-
-            let rawTrips = [];
-            for (let r = vS.row; r <= vE.row; r++) {
-                [{ v: data[r]?.[c], d: "I" }, { v: data[r]?.[c+1], d: "V" }].forEach(item => {
-                    let m = Engine.toMin(item.v);
-                    if (m !== null) {
-                        const key = `${carroID}_${m}_${item.d}`;
-                        let end = (item.d === "I") 
-                            ? (Engine.toMin(data[r]?.[c+1]) || Engine.toMin(data[r+1]?.[c+1]) || m)
-                            : (Engine.toMin(data[r+1]?.[c]) || m);
-
-                        rawTrips.push({ 
-                            dir: item.d, start: m, end: end,
-                            overrideType: excecoes.tipo[key],
-                            overrideLocal: excecoes.local[key],
-                            overrideLinha: excecoes.linha[key]
+                if (minSaida !== null) {
+                    const proximoValor = (r < endRange.row) ? sheetData[r+1][c] : null;
+                    const minChegada = Engine.toMin(proximoValor);
+                    
+                    if (minChegada !== null) {
+                        // Viagem Produtiva
+                        viagensDoCarro.push({
+                            type: 'VIAGEM',
+                            start: minSaida,
+                            end: minChegada,
+                            direction: sheetData[range.row + SETTINGS.viagensConf.linhaSentido - 1][c],
+                            carro: carroID,
+                            tipoInterno: SETTINGS.tipoProdutivo,
+                            forcarNovaTabela: isTrocaForcada
+                        });
+                        r++; // Pula a linha de chegada
+                    } else {
+                        // Evento (Início sem fim imediato)
+                        const existeMaisViagem = sheetData.slice(r+1, endRange.row+1).some(row => Engine.toMin(row[c]) !== null);
+                        viagensDoCarro.push({
+                            type: existeMaisViagem ? 'INTERVALO' : 'RECOLHE',
+                            start: minSaida,
+                            carro: carroID,
+                            tipoInterno: SETTINGS.tipoOcioso,
+                            forcarNovaTabela: isTrocaForcada
                         });
                     }
-                });
-            }
-
-            if (rawTrips.length === 0) continue;
-            rawTrips.sort((a, b) => a.start - b.start);
-
-            let tabIdx = 0, seq = globalCtx.firstSeq, currentRows = [];
-            
-            for (let i = 0; i < rawTrips.length; i++) {
-                let trip = rawTrips[i];
-                
-                while (trocas.length > 0 && trip.start >= trocas[0].min) {
-                    const potentialTabC = carroID + "C";
-                    const tabName = (tabIdx === 1 && duplaPegadaSet.has(potentialTabC)) 
-                        ? potentialTabC 
-                        : carroID + ["A", "B", "D", "E"][tabIdx];
-
-                    const isTableDP = duplaPegadaSet.has(tabName);
-                    allRows.push(...Engine.applyLayout(currentRows, trocas[0], false, globalCtx, tabName, tabIdx === 0, carIdaDef, carVoltaDef, carroID, excecoes, isTableDP));
-                    
-                    currentRows = []; 
-                    trocas.shift(); 
-                    tabIdx++; 
-                    seq = globalCtx.firstSeq; 
-                }
-
-                currentRows.push({ ...trip, seq: seq++ });
-
-                if (i === rawTrips.length - 1) {
-                    const potentialTabC = carroID + "C";
-                    const tabName = (tabIdx === 1 && duplaPegadaSet.has(potentialTabC)) 
-                        ? potentialTabC 
-                        : carroID + ["A", "B", "D", "E"][tabIdx];
-
-                    const isTableDP = duplaPegadaSet.has(tabName);
-                    allRows.push(...Engine.applyLayout(currentRows, { min: trip.end + globalCtx.recoMins, sentido: trip.dir }, true, globalCtx, tabName, tabIdx === 0, carIdaDef, carVoltaDef, carroID, excecoes, isTableDP));
                 }
             }
-        }
-        return allRows;
-    },
 
-    applyLayout: (trips, endObj, isLast, global, tabName, isFirst, carIdaDef, carVoltaDef, carroID, excecoes, isTableDP) => {
-        if (trips.length === 0) return [];
-        
-        // Regras de Turno e Preparo
-        let turn = isTableDP ? 3 : (trips[0].start >= global.cutOffMin ? 2 : 1);
-        const isTabelaC = String(tabName).endsWith("C");
-        const valorPreparoMins = (isTableDP && isTabelaC && !SETTINGS.preparo2aPegadaDP) ? 0 : global.prepMins;
+            // 3. Gerar Dados Formatados com Nomenclatura de Tabelas
+            let idxNormal = 0;
+            let idxIntervalo = 0;
+            let tabelaAtual = SETTINGS.sequenciaNormal[idxNormal];
 
-        // Novos cálculos de horário conforme solicitado:
-        // INICIO: Horário real da 1ª viagem
-        const horarioInicioTabela = Engine.minToTime(trips[0].start);
-        // INIC_GAR: Início real - Acesso (Preparo NÃO entra aqui)
-        const garageStartValue = isFirst ? Engine.minToTime(trips[0].start - global.acesMins) : "00:00";
+            viagensDoCarro.forEach((v, i) => {
+                // Lógica de troca de letra da tabela
+                if (i > 0) {
+                    const anterior = viagensDoCarro[i-1];
+                    if (anterior.type === 'INTERVALO') {
+                        // Se veio de um "buraco", usa sequência de intervalo
+                        tabelaAtual = SETTINGS.sequenciaPosIntervalo[idxIntervalo++] || "Z";
+                    } else if (v.forcarNovaTabela || (v.type === 'VIAGEM' && anterior.type === 'VIAGEM')) {
+                        // Se é troca imediata ou forçada por linhaTrocaTurno
+                        tabelaAtual = SETTINGS.sequenciaNormal[++idxNormal] || "Y";
+                    }
+                }
 
-        const valorPegada = isFirst ? global.codLocalPegada : (trips[0].overrideLocal || (trips[0].dir === "I" ? carIdaDef : carVoltaDef));
-        const lastIndex = trips.length - 1;
-        const result = [];
-        
-        trips.forEach((t, idx) => {
-            const isLastOfBlock = (idx === lastIndex);
-            const tripCtx = {
-                tab: tabName, turn: turn,
-                tabStart: horarioInicioTabela,
-                tabEnd: Engine.minToTime(endObj.min),
-                garageStart: garageStartValue,
-                direction: t.dir,
-                seq: t.seq,
-                departure: Engine.minToTime(t.start),
-                arrival: Engine.minToTime(t.end),
-                pegada: valorPegada,
-                preparo: valorPreparoMins,
-                activity: t.overrideType || SETTINGS.atividades.produtiva,
-                localCode: t.overrideLocal || (t.dir === "I" ? carIdaDef : carVoltaDef),
-                codLinha: t.overrideLinha || global.codLinha
-            };
-            
-            if (!(isLastOfBlock && isLast)) result.push(Engine.finalize(tripCtx, global));
-
-            if (isLastOfBlock) {
-                const horaBusca = isLast ? t.start : endObj.min;
-                const sentidoReal = isLast ? t.dir : endObj.sentido;
-                const ocioso = excecoes.ocioso[`${carroID}_${horaBusca}_${sentidoReal}`] || {};
-                const tempoRecolhe = (ocioso.recolhe !== undefined && ocioso.recolhe !== null) ? ocioso.recolhe : (isLast ? global.recoMins : 0);
-                
-                const extraCtx = {
-                    tab: tabName, turn: turn,
-                    tabStart: horarioInicioTabela,
-                    tabEnd: Engine.minToTime(isLast ? t.end + tempoRecolhe : endObj.min),
-                    garageStart: garageStartValue,
-                    direction: sentidoReal,
-                    seq: isLast ? t.seq : t.seq + 1,
-                    departure: isLast ? Engine.minToTime(t.start) : Engine.minToTime(endObj.min),
-                    arrival: isLast ? Engine.minToTime(t.end + tempoRecolhe) : Engine.minToTime(endObj.min),
-                    pegada: valorPegada,
-                    preparo: valorPreparoMins,
-                    activity: ocioso.activity || ocioso.atividade || (isLast ? SETTINGS.atividades.recolhe : SETTINGS.atividades.troca_turno),
-                    localCode: ocioso.local || (isLast ? "11" : SETTINGS.atividades.troca_turno),
-                    codLinha: global.codLinha
+                const exc = Engine.getExcecao(v, excecoes);
+                const context = {
+                    prog: global.codProg,
+                    tab: tabelaAtual,
+                    carro: v.carro,
+                    start: Engine.minToTime(v.start),
+                    end: v.end ? Engine.minToTime(v.end) : "",
+                    direction: exc?.novoSentido || v.direction || "",
+                    activity: exc?.novoTipo || (v.type === 'VIAGEM' ? SETTINGS.atividades.produtiva : (v.type === 'INTERVALO' ? SETTINGS.atividades.troca_turno : SETTINGS.atividades.recolhe)),
+                    local: exc?.novoLocal || (v.type === 'VIAGEM' ? "" : (v.type === 'INTERVALO' ? "10" : "11")),
+                    lin: exc?.novaLinha || global.codLinha,
+                    isExcecaoLinha: !!exc?.novaLinha // Crucial para a regra do COD_LINHA vazio
                 };
-                result.push(Engine.finalize(extraCtx, global));
-            }
-        });
-        return result;
+
+                if (v.type === 'VIAGEM') {
+                    finalRows.push(Engine.applyLayout(context));
+                } 
+                else if (v.type === 'INTERVALO' && SETTINGS.geraEntradaIntervalos) {
+                    finalRows.push(Engine.applyLayout(context));
+                }
+                else if (v.type === 'RECOLHE' && SETTINGS.geraEntradaRecolhidas) {
+                    finalRows.push(Engine.applyLayout(context));
+                }
+
+            });
+        }
+        return finalRows;
     },
 
-    finalize: (tripCtx, global) => {
-        const finalizedRow = {};
+    applyLayout: (data) => {
+        const mapped = {};
         SETTINGS.layout.forEach(conf => {
-            if (conf.field === "COD_LINHA" && tripCtx.codLinha) {
-                finalizedRow[conf.field] = String(tripCtx.codLinha).padStart(conf.size, conf.pad || "0");
-                return;
+            // Se houver uma função resolve, ela tem prioridade
+            if (typeof conf.resolve === 'function') {
+                mapped[conf.field] = conf.resolve(data);
+            } else {
+                mapped[conf.field] = data[conf.field] || "";
             }
-            finalizedRow[conf.field] = (typeof conf.resolve === 'function') 
-                ? conf.resolve({ trip: tripCtx, global: global, helpers: Engine }) 
-                : (tripCtx[conf.field] || "");
         });
-        return finalizedRow;
+        return mapped;
     }
 };
