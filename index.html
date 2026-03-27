@@ -116,39 +116,44 @@
             const reader = new FileReader();
             
             reader.onload = function(e) {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                
                 try {
-                    // 1. Pega o nome da aba configurada (ex: 'dados')
-                    const nomeDaGuia = SETTINGS.guiaAnalise || workbook.SheetNames[0];
-                    const aba = workbook.Sheets[nomeDaGuia];
+                    const data = new Uint8Array(e.target.result);
+                    // O engine.js espera o objeto workbook bruto para extrair a aba correta
+                    const workbook = XLSX.read(data, {type: 'array'});
                     
-                    if (!aba) {
-                        throw new Error(`A aba "${nomeDaGuia}" não foi encontrada no arquivo Excel.`);
+                    // 1. Chama o motor passando o workbook inteiro
+                    // O Engine interno fará: XLSX.utils.sheet_to_json(workbook.Sheets[SETTINGS.guiaAnalise])
+                    const results = Engine.process(workbook);
+                    
+                    if (!results || results.length === 0) {
+                        throw new Error("Nenhum dado processado. Verifique se a aba e os intervalos estão corretos.");
                     }
                     
-                    // 2. Converte a aba em uma MATRIZ (Array de Arrays)
-                    // O header: 1 é fundamental para o engine funcionar
-                    const sheetData = XLSX.utils.sheet_to_json(aba, { header: 1 });
-                    
-                    // 3. Agora sim, passa a MATRIZ para o motor
-                    const results = Engine.process(sheetData);
-                    
+                    // 2. Exportação conforme o formato selecionado
                     if (format === 'txt') {
                         Exporter.download(Exporter.toTXT(results), 'import.txt', 'text/plain');
-                    }
-                    if (format === 'csv') {
+                    } else if (format === 'csv') {
                         Exporter.download(Exporter.toCSV(results), 'import.csv', 'text/csv');
                     }
                     
-                    appAlert('success', 'Arquivo processado com sucesso!', true);
+                    // Feedback visual de sucesso (função assumida como existente no seu app.js)
+                    if (typeof appAlert === 'function') {
+                        appAlert('success', 'Arquivo processado com sucesso!', true);
+                    } else {
+                        alert("Arquivo processado com sucesso!");
+                    }
                     
                 } catch (err) {
                     console.error(err);
-                    appAlert('danger', `<b>Erro</b> ao processar arquivo:<hr><code>${err.message}</code>`, false);
+                    // Tratamento de erro detalhado para o usuário
+                    if (typeof appAlert === 'function') {
+                        appAlert('danger', `<b>Erro</b> ao processar arquivo:<hr><code>${err.message}</code>`, false);
+                    } else {
+                        alert(`Erro: ${err.message}`);
+                    }
                 }
             };
+            
             reader.readAsArrayBuffer(fileInput.files[0]);
         }
     </script>
