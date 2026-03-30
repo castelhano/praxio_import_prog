@@ -29,7 +29,7 @@ const SETTINGS = {
     // Primeira tabela e retornos de TT
     sequenciaNormal: ['A', 'B', 'D', 'E', 'F'],
     // Retornos de intervalo (2ª pegada ou pausa)
-    sequenciaPosIntervalo: ['C', 'G', 'H', 'I'],
+    sequenciaPosIntervalo: ['C', 'V', 'X', 'Z'],
 
     // ── Células de configuração na planilha (coluna C, linhas 2-11) ───────────
     cells: {
