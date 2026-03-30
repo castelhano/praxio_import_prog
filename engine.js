@@ -8,7 +8,7 @@
  *      b. Lê trocas de turno (linhas 29-31)
  *      c. Percorre células em zigzag montando viagens com início e fim
  *      d. Divide viagens em tabelas (por TT e por intervalo/recolhe)
- *      e. Nomeia tabelas, aplica exceções, DP, preparo, INIC_GAR
+ *      e. Nomeia tabelas, aplica exceções de tabela e de viagem, preparo, INIC_GAR
  *   3. Retorna array de { trip, global } prontos para o Exporter
  */
 
@@ -57,14 +57,13 @@ const Engine = {
         if (val === null || val === undefined || val === '') return null;
 
         if (typeof val === 'number') {
-            if (val >= 1) return Math.round(val);
-            return Math.round(val * 24 * 60);
+            return Math.round((val % 1) * 24 * 60);
+            // if (val >= 1) return Math.round(val);
+            // return Math.round(val * 24 * 60);
         }
 
         if (typeof val === 'string') {
             const s = val.trim();
-            const upper = s.toUpperCase();
-            if (SETTINGS.viagensConf.ignoreKeywords.some(k => upper.includes(k))) return null;
             if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) {
                 const parts = s.split(':').map(Number);
                 return parts[0] * 60 + parts[1];
@@ -78,7 +77,7 @@ const Engine = {
     /** Converte minutos → "HH:MM". Suporta horários além de 24h. */
     minToTime(m) {
         if (m === null || m === undefined || isNaN(m)) return '';
-        const total = Math.round(m);
+        const total = Math.round(m) % (24 * 60); // % (24 * 60) converte 24:10 -> 00:10
         if (total < 0) return '';
         const h   = Math.floor(total / 60);
         const min = total % 60;
@@ -99,7 +98,10 @@ const Engine = {
     // LEITURA DE CONFIGURAÇÕES
     // =========================================================================
 
-    /** Lê células de configuração e retorna globalCtx */
+    /**
+     * Lê células de configuração do excel e retorna globalCtx.
+     * Nota: firstSeq e mapaTurnos vêm de SETTINGS (não do excel).
+     */
     readGlobalConfig(matrix) {
         const c = SETTINGS.cells;
         return {
@@ -110,48 +112,51 @@ const Engine = {
             prepMins:       this.toMin(this.getCell(matrix, c.tempoPreparo))  ?? 0,
             acesMins:       this.toMin(this.getCell(matrix, c.tempoAcesso))   ?? 0,
             recoMins:       this.toMin(this.getCell(matrix, c.tempoRecolhe))  ?? 0,
-            cutOffMin:      this.toMin(this.getCell(matrix, c.horaCorteTurno)) ?? 720,
-            firstSeq:       parseInt(this.getCell(matrix, c.primeiroCodViagem) ?? 1),
+            firstSeq:       SETTINGS.primeiroCodViagem,
             codLocalPegada: String(this.getCell(matrix, c.codLocalPegada)  ?? ''),
         };
     },
 
     /**
-     * Lê o intervalo de dupla pegada.
-     * Retorna:
-     *   tabelas: Set de nomes de tabela DP (ex: {"01A","02C"})
-     *   carros:  Set de carroIDs que possuem DP (ex: {"01","02"})
+     * Resolve o número do turno para uma tabela com base em settings.mapaTurnos.
+     *
+     * O mapa é percorrido em ordem crescente de horário de corte.
+     * O turno retornado é o do primeiro corte cujo horário seja > tabStartMin.
+     * Se o início ultrapassar todos os cortes, retorna o valor do último.
+     *
+     * Exemplo com mapaTurnos = { '12:00': 1, '18:00': 2, '22:00': 3, '99:00': 4 }:
+     *   06:00 (360 min)  → turno 1
+     *   14:00 (840 min)  → turno 2
+     *   20:00 (1200 min) → turno 3
+     *   23:00 (1380 min) → turno 4
      */
-    readDuplaPegada(matrix) {
-        const tabelas = new Set();
-        const carros  = new Set();
-        const { start, end } = this.parseRange(SETTINGS.viagensConf.intervaloDuplaPegada);
+    resolveturno(tabStartMin) {
+        const mapa = SETTINGS.mapaTurnos;
+        const entradas = Object.entries(mapa)
+            .map(([hora, turno]) => ({ corteMin: this.toMin(hora), turno }))
+            .sort((a, b) => a.corteMin - b.corteMin);
 
-        for (let r = start.row; r <= end.row; r++) {
-            const val = matrix[r]?.[start.col];
-            if (!val) continue;
-            const s = String(val).trim().toUpperCase();
-            if (/^\d{2}[A-Z]$/.test(s)) {
-                tabelas.add(s);
-                carros.add(s.substring(0, 2));
-            }
+        for (const { corteMin, turno } of entradas) {
+            if (tabStartMin < corteMin) return turno;
         }
-        return { tabelas, carros };
+
+        // Fallback: último turno definido
+        return entradas[entradas.length - 1]?.turno ?? 1;
     },
 
     /**
-     * Lê o intervalo de exceções (definido em settings.viagensConf.intervaloExcecoes).
+     * Lê o intervalo de exceções de VIAGENS (settings.viagensConf.intervaloExcecoesViagens).
      *
      * Colunas (relativas ao início do intervalo):
-     *   0=carro  1=viagem  2=sentido  3=tipo (critérios de identificação)
-     *   4=atividade  5=local  6=linha  7=preparo  8=acesso  9=recolhe (overrides)
+     *   0=carro  1=viagem  2=sentido  3=tipo  (critérios de identificação)
+     *   4=atividade  5=local  6=linha          (overrides de viagem)
      *
      * Precisa de ao menos um critério preenchido por linha.
      * Matching é AND entre todos os critérios preenchidos.
      */
-    readExcecoes(matrix) {
+    readExcecoesViagens(matrix) {
         const rules = [];
-        const { start, end } = this.parseRange(SETTINGS.viagensConf.intervaloExcecoes);
+        const { start, end } = this.parseRange(SETTINGS.viagensConf.intervaloExcecoesViagens);
 
         for (let r = start.row; r <= end.row; r++) {
             const row = matrix[r];
@@ -172,12 +177,9 @@ const Engine = {
 
             const overrides = {};
             const overrideDefs = [
-                ['atividade', start.col + 4, v => String(v)         ],
-                ['local',     start.col + 5, v => String(v)         ],
-                ['linha',     start.col + 6, v => String(v)         ],
-                ['preparo',   start.col + 7, v => this.toMin(v)     ],
-                ['acesso',    start.col + 8, v => this.toMin(v)     ],
-                ['recolhe',   start.col + 9, v => this.toMin(v)     ],
+                ['atividade', start.col + 4, v => String(v)     ],
+                ['local',     start.col + 5, v => String(v)     ],
+                ['linha',     start.col + 6, v => String(v)     ],
             ];
             for (const [field, colIdx, fn] of overrideDefs) {
                 const v = row[colIdx];
@@ -190,11 +192,58 @@ const Engine = {
     },
 
     /**
-     * Aplica regras de exceção a uma viagem.
+     * Lê o intervalo de exceções de TABELAS (settings.viagensConf.intervaloExcecoesTabelas).
+     *
+     * Colunas (relativas ao início do intervalo):
+     *   0=tabela (filtro, ex: "01A")
+     *   1=nome  2=inicio  3=fim  4=periodo
+     *   5=saida_garagem  6=preparo  7=acesso  8=recolhe
+     *
+     * Retorna Map<tabName, overrides> para lookup O(1) no engine.
+     */
+    readExcecoesTabelas(matrix) {
+        const map = new Map();
+        const { start, end } = this.parseRange(SETTINGS.viagensConf.intervaloExcecoesTabelas);
+
+        for (let r = start.row; r <= end.row; r++) {
+            const row = matrix[r];
+            if (!row) continue;
+
+            const rawTab = row[start.col];
+            if (rawTab == null || rawTab === '') continue;
+
+            const tabKey = String(rawTab).trim().toUpperCase();
+            const overrides = {};
+
+            const defs = [
+                ['nome',          start.col + 1, v => String(v).trim()      ],
+                ['inicio',        start.col + 2, v => this.toMin(v)         ],
+                ['fim',           start.col + 3, v => this.toMin(v)         ],
+                ['periodo',       start.col + 4, v => parseInt(v, 10)       ],
+                ['saidaGaragem',  start.col + 5, v => this.toMin(v)         ],
+                ['preparo',       start.col + 6, v => this.toMin(v)         ],
+                ['acesso',        start.col + 7, v => this.toMin(v)         ],
+                ['recolhe',       start.col + 8, v => this.toMin(v)         ],
+            ];
+
+            for (const [field, colIdx, fn] of defs) {
+                const v = row[colIdx];
+                if (v != null && v !== '') overrides[field] = fn(v);
+            }
+
+            if (Object.keys(overrides).length > 0) {
+                map.set(tabKey, overrides);
+            }
+        }
+        return map;
+    },
+
+    /**
+     * Aplica regras de exceção de VIAGEM a uma viagem.
      * Retorna objeto merged com overrides de todas as regras que batem.
      * @param {string} tipo - "P" (produtiva) ou "O" (ociosa/TT/intervalo/recolhe)
      */
-    applyExcecoes(rules, carroID, startMin, sentido, tipo) {
+    applyExcecoesViagens(rules, carroID, startMin, sentido, tipo) {
         const merged = {};
         for (const { criterios, overrides } of rules) {
             if (criterios.carro   !== undefined && criterios.carro   !== carroID)  continue;
@@ -296,11 +345,12 @@ const Engine = {
             }
         }
 
+        // REMOVER AQUI, trips nao deve ser ordenado....
         // Ordenar cronologicamente (IDA antes de VOLTA no mesmo horário)
-        trips.sort((a, b) => {
-            if (a.start === b.start) return a.dir === 'I' ? -1 : 1;
-            return this.isAfter(a.start, b.start) ? -1 : 1;
-        });
+        // trips.sort((a, b) => {
+        //     if (a.start === b.start) return a.dir === 'I' ? -1 : 1;
+        //     return this.isAfter(a.start, b.start) ? -1 : 1;
+        // });
 
         return trips;
     },
@@ -405,12 +455,16 @@ const Engine = {
     /**
      * Monta contextos { trip, global } para todas as viagens de uma tabela.
      * Inclui linha extra de encerramento (TT / intervalo / recolhe) se configurado.
+     *
+     * tabOverrides (de readExcecoesTabelas) tem precedência sobre os valores
+     * globais para: nome, tabStart, tabEnd, turno, saidaGaragem, preparo,
+     * acesso e recolhe — permitindo customização completa por tabela.
      */
     buildTableRows(opts) {
         const {
             carroID, tabName, isFirstTable,
             trips, ttEnd, isLastTable, isIntervalo,
-            globalCtx, dp, excRules,
+            globalCtx, excViagensRules, tabOverrides,
             codLocalIda, codLocalVolta,
         } = opts;
 
@@ -419,20 +473,33 @@ const Engine = {
         const firstTrip = trips[0];
         const lastTrip  = trips[trips.length - 1];
 
+        // ── NOME DA TABELA (pode ser renomeada pela exceção de tabela) ──
+        const resolvedTabName = tabOverrides.nome ?? tabName;
+
         // ── TURN ──
-        const isCarroDP = dp.carros.has(carroID);
-        const turn = isCarroDP ? 3
-            : (firstTrip.start < globalCtx.cutOffMin ? 1 : 2);
+        // Prioridade: exceção de tabela → mapaTurnos (por horário de início)
+        const tabStartMinForTurn = tabOverrides.inicio ?? firstTrip.start;
+        const turn = tabOverrides.periodo ?? this.resolveturno(tabStartMinForTurn);
 
         // ── PREPARO ──
-        const preparo = (isCarroDP && !isFirstTable && !SETTINGS.preparo2aPegadaDP)
-            ? 0
-            : globalCtx.prepMins;
+        // Prioridade: exceção de tabela → global
+        const preparo = tabOverrides.preparo ?? globalCtx.prepMins;
 
-        // ── INIC_GAR ── só primeira tabela
-        const garageStart = isFirstTable
-            ? this.minToTime(firstTrip.start - globalCtx.acesMins)
-            : '';
+        // ── ACESSO ──
+        const acesMins = tabOverrides.acesso ?? globalCtx.acesMins;
+
+        // ── RECOLHE BASE ──
+        const recoMinsBase = tabOverrides.recolhe ?? globalCtx.recoMins;
+
+        // ── INIC_GAR ── só primeira tabela; pode ser sobrescrito por exceção
+        let garageStart;
+        if (tabOverrides.saidaGaragem != null) {
+            garageStart = isFirstTable ? this.minToTime(tabOverrides.saidaGaragem) : '';
+        } else {
+            garageStart = isFirstTable
+                ? this.minToTime(firstTrip.start - acesMins)
+                : '';
+        }
 
         // ── COD_PEGADA ──
         const pegada = isFirstTable
@@ -440,14 +507,18 @@ const Engine = {
             : (firstTrip.dir === 'I' ? codLocalIda : codLocalVolta);
 
         // ── tabStart ──
-        const tabStart = this.minToTime(firstTrip.start);
+        const tabStartMin = tabOverrides.inicio ?? firstTrip.start;
+        const tabStart = this.minToTime(tabStartMin);
 
         // ── tabEnd ──
-        const recoExc  = this.applyExcecoes(excRules, carroID, lastTrip.start, lastTrip.dir, 'O');
-        const recoMins = recoExc.recolhe ?? globalCtx.recoMins;
+        const recoExc  = this.applyExcecoesViagens(excViagensRules, carroID, lastTrip.start, lastTrip.dir, 'O');
+        // Exceção de tabela tem prioridade; excecão de viagem vem depois; depois global
+        const recoMins = tabOverrides.recolhe ?? recoExc.recolhe ?? recoMinsBase;
 
         let tabEndMin;
-        if (ttEnd) {
+        if (tabOverrides.fim != null) {
+            tabEndMin = tabOverrides.fim;
+        } else if (ttEnd) {
             tabEndMin = ttEnd.min;
         } else if (isIntervalo) {
             tabEndMin = lastTrip.start;
@@ -458,7 +529,7 @@ const Engine = {
 
         // ── Helper para montar o objeto trip ──
         const makeTripCtx = (dir, startMin, endMin, seqStr, activity, localCode, excOverride) => ({
-            tab:            tabName,
+            tab:            resolvedTabName,
             turn:           String(turn),
             tabStart,
             tabEnd,
@@ -483,7 +554,7 @@ const Engine = {
             const t      = trips[i];
             const isLast = (i === trips.length - 1);
 
-            const exc       = this.applyExcecoes(excRules, carroID, t.start, t.dir, 'P');
+            const exc       = this.applyExcecoesViagens(excViagensRules, carroID, t.start, t.dir, 'P');
             const localCode = exc.local ?? (t.dir === 'I' ? codLocalIda : codLocalVolta);
 
             rows.push({
@@ -499,27 +570,28 @@ const Engine = {
 
             // ── Linha de encerramento ──
             if (isLast) {
-                
+                const dirOposto = t.dir === 'I' ? 'V' : 'I';
+
                 // ── Troca de turno ──
-                if (ttEnd && SETTINGS.geraEntradaIntervalos) {
-                    const excTT  = this.applyExcecoes(excRules, carroID, ttEnd.min, ttEnd.sentido, 'O');
-                    const atTT   = excTT.atividade ?? SETTINGS.atividades.troca_turno;
-                    const lcTT   = excTT.local ?? atTT;
-                    rows.push({ trip: makeTripCtx(ttEnd.sentido, ttEnd.min, ttEnd.min, String(seq), atTT, lcTT, excTT), global: globalCtx });
+                if (ttEnd && SETTINGS.geraEntradaTrocaTurno) {
+                    const excTT = this.applyExcecoesViagens(excViagensRules, carroID, ttEnd.min, ttEnd.sentido, 'O');
+                    const atTT  = excTT.atividade ?? SETTINGS.atividades.troca_turno;
+                    const lcTT  = excTT.local ?? atTT;
+                    rows.push({ trip: makeTripCtx(dirOposto, ttEnd.min, ttEnd.min, String(seq), atTT, lcTT, excTT), global: globalCtx });
 
                 // ── Intervalo ──
-                } else if (isIntervalo && SETTINGS.geraEntradaIntervalos) {
-                    const excInt    = this.applyExcecoes(excRules, carroID, t.start, t.dir, 'O');
+                } else if (isIntervalo) {
+                    const excInt = this.applyExcecoesViagens(excViagensRules, carroID, t.start, t.dir, 'O');
                     const atInt  = excInt.atividade ?? SETTINGS.atividades.intervalo;
                     const lcInt  = excInt.local ?? atInt;
-                    rows.push({ trip: makeTripCtx(t.dir, t.start, t.start, String(seq), atInt, lcInt, excInt), global: globalCtx });
-                
+                    rows.push({ trip: makeTripCtx(dirOposto, t.start, t.start, String(seq), atInt, lcInt, excInt), global: globalCtx });
+
                 // ── Recolhe ──
                 } else if (isLastTable && SETTINGS.geraEntradaRecolhidas) {
                     const endMin = (t.end ?? t.start) + recoMins;
                     const atReco = recoExc.atividade ?? SETTINGS.atividades.recolhe;
                     const lcReco = recoExc.local ?? atReco;
-                    rows.push({ trip: makeTripCtx(t.dir, t.end ?? t.start, endMin, String(seq), atReco, lcReco, recoExc), global: globalCtx });
+                    rows.push({ trip: makeTripCtx(dirOposto, t.end ?? t.start, endMin, String(seq), atReco, lcReco, recoExc), global: globalCtx });
                 }
             }
         }
@@ -538,9 +610,9 @@ const Engine = {
         const sheet  = workbook.Sheets[SETTINGS.guiaAnalise];
         const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
 
-        const globalCtx = this.readGlobalConfig(matrix);
-        const dp        = this.readDuplaPegada(matrix);
-        const excRules  = this.readExcecoes(matrix);
+        const globalCtx        = this.readGlobalConfig(matrix);
+        const excViagensRules  = this.readExcecoesViagens(matrix);
+        const excTabelasMap    = this.readExcecoesTabelas(matrix);
 
         const vConf              = SETTINGS.viagensConf;
         const { start: vS, end: vE } = this.parseRange(vConf.intervaloGeral);
@@ -579,13 +651,16 @@ const Engine = {
                 const tabName      = carroID + letter;
                 usedLetters.push(letter);
 
+                // Busca overrides de tabela (antes de renomear — chave pelo nome original)
+                const tabOverrides = excTabelasMap.get(tabName.toUpperCase()) ?? {};
+
                 const rows = this.buildTableRows({
                     carroID, tabName, isFirstTable,
                     trips:       table.trips,
                     ttEnd:       table.ttEnd,
                     isLastTable: table.isLastTable,
                     isIntervalo: table.isIntervalo,
-                    globalCtx, dp, excRules,
+                    globalCtx, excViagensRules, tabOverrides,
                     codLocalIda, codLocalVolta,
                 });
 

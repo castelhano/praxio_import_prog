@@ -8,14 +8,36 @@ const SETTINGS = {
     // false = tabelas de 2ª pegada (DP) não recebem tempo de preparo
     preparo2aPegadaDP: false,
 
-    // Gera linha de encerramento com atividade troca_turno / intervalo
-    geraEntradaIntervalos: true,
+    // Gera linha de encerramento com atividade troca_turno
+    geraEntradaTrocaTurno: true,
 
     // Gera linha de recolhe ao final da última tabela do carro
     geraEntradaRecolhidas: true,
 
     // Aplica formatação de campo (padding/alinhamento) também no CSV
     aplicarFormatacaoNoCsv: true,
+
+    // ── Primeiro código sequencial de viagem 
+    primeiroCodViagem: 10,
+
+    // ── Mapa de turnos: horário de corte → número do turno ────────────────────
+    // Lógica: se o início da tabela for < que a chave (em minutos), usa aquele turno.
+    // As chaves são avaliadas em ordem crescente; o primeiro corte que o início
+    // da tabela não ultrapassa define o turno. Se ultrapassar todos, usa o último.
+    //
+    // Exemplo:
+    //   "12:00" → turno 1  (tabelas que iniciam antes das 12:00)
+    //   "18:00" → turno 2  (tabelas que iniciam entre 12:00 e 17:59)
+    //   "22:00" → turno 3  (tabelas que iniciam entre 18:00 e 21:59)
+    //   qualquer coisa além → turno 4
+    //
+    // Pode-se usar quantos cortes forem necessários (mínimo 1).
+    mapaTurnos: {
+        '12:00': 1,
+        '18:00': 2,
+        '22:00': 3,
+        '99:00': 4,   // sentinela — captura qualquer horário restante
+    },
 
     // ── Códigos de atividade ──────────────────────────────────────────────────
     atividades: {
@@ -31,18 +53,16 @@ const SETTINGS = {
     // Retornos de intervalo (2ª pegada ou pausa)
     sequenciaPosIntervalo: ['C', 'V', 'X', 'Z'],
 
-    // ── Células de configuração na planilha (coluna C, linhas 2-11) ───────────
+    // ── Células de configuração na planilha ───────────
     cells: {
-        codProg:         'C2',
-        codLinha:        'C3',
-        codIda:          'C4',
-        codVolta:        'C5',
-        tempoPreparo:    'C6',
-        tempoAcesso:     'C7',
-        tempoRecolhe:    'C8',
-        horaCorteTurno:  'C9',
-        primeiroCodViagem: 'C10',
-        codLocalPegada:  'C11',
+        codProg:         'F2',
+        codLinha:        'F3',
+        codIda:          'F4',
+        codVolta:        'F5',
+        tempoPreparo:    'F6',
+        tempoAcesso:     'F7',
+        tempoRecolhe:    'F8',
+        codLocalPegada:  'F9',
     },
 
     // ── Configuração da grade de viagens ──────────────────────────────────────
@@ -50,11 +70,16 @@ const SETTINGS = {
         // Intervalo principal de viagens (duas colunas por carro: IDA + VOLTA)
         intervaloGeral:        'I4:AV28',
 
-        // Coluna com identificação de dupla pegada (ex: "01A", "02C")
-        intervaloDuplaPegada:  'G2:G28',
+        // Intervalo de exceções de VIAGENS (colunas A-G):
+        //   A=carro  B=viagem  C=sentido  D=tipo  (critérios)
+        //   E=atividade  F=local  G=linha         (overrides de viagem)
+        intervaloExcecoesViagens: 'A35:G55',
 
-        // Intervalo de exceções (colunas: A-D critérios, E-J overrides)
-        intervaloExcecoes:     'A35:J55',
+        // Intervalo de exceções de TABELAS (colunas L-T):
+        //   L=tabela (filtro)
+        //   M=nome  N=inicio  O=fim  P=periodo
+        //   Q=saida_garagem  R=preparo  S=acesso  T=recolhe
+        intervaloExcecoesTabelas: 'L35:T55',
 
         // Número da linha (1-based) que contém o ID sequencial do carro
         linhaCarroID:    1,
@@ -65,9 +90,6 @@ const SETTINGS = {
 
         // Linhas de troca de turno (máximo 3 cortes por carro)
         linhasTrocaTurno: [29, 30, 31],
-
-        // Textos a ignorar nas células de viagem (qualquer correspondência parcial)
-        ignoreKeywords: ['RECO', 'INTERV'],
     },
 
     // ── Layout de saída ───────────────────────────────────────────────────────
@@ -87,7 +109,7 @@ const SETTINGS = {
     //
     // ctx.global campos disponíveis:
     //   codProg, codLinha, codIda, codVolta, prepMins, acesMins, recoMins,
-    //   cutOffMin, firstSeq, codLocalPegada
+    //   firstSeq, codLocalPegada
     //
     layout: [
         { field: 'COD_PROG',   size: 7,  pad: ' ', align: 'L',           resolve: (ctx) => ctx.global.codProg       },
