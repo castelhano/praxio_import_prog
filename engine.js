@@ -47,19 +47,18 @@ const Engine = {
 
     /**
      * Converte valor de célula para minutos inteiros.
-     * - Número < 1: fração de dia SheetJS (0.25 = 06:00)
-     * - Número >= 1: já em minutos (ex: preparo = 5)
+     * - Número com fração: serial SheetJS com ou sem data (extrai apenas a parte horária)
+     * - Número inteiro puro: minutos diretos (ex: preparo = 5)
      * - String "HH:MM" ou "H:MM": converte normalmente
      * - String numérica "10": minutos diretos
-     * - Texto (RECO, INTERV…): retorna null
+     * - Qualquer outro texto: retorna null
      */
     toMin(val) {
         if (val === null || val === undefined || val === '') return null;
 
         if (typeof val === 'number') {
-            return Math.round((val % 1) * 24 * 60);
-            // if (val >= 1) return Math.round(val);
-            // return Math.round(val * 24 * 60);
+            if (val % 1 === 0) return Math.round(val);       // inteiro = minutos diretos
+            return Math.round((val % 1) * 24 * 60);          // extrai horário da fração
         }
 
         if (typeof val === 'string') {
@@ -74,10 +73,13 @@ const Engine = {
         return null;
     },
 
-    /** Converte minutos → "HH:MM". Suporta horários além de 24h. */
+    /**
+     * Converte minutos → "HH:MM".
+     * Aplica módulo 24h para garantir formato válido após virada de dia.
+     */
     minToTime(m) {
         if (m === null || m === undefined || isNaN(m)) return '';
-        const total = Math.round(m) % (24 * 60); // % (24 * 60) converte 24:10 -> 00:10
+        const total = Math.round(m) % (24 * 60);
         if (total < 0) return '';
         const h   = Math.floor(total / 60);
         const min = total % 60;
@@ -86,7 +88,7 @@ const Engine = {
 
     /**
      * Retorna true se b é cronologicamente posterior a a,
-     * com suporte a virada de dia: diferença invertida < 12h = b é no dia seguinte.
+     * com suporte a virada de dia: diferença invertida > 12h = b é no dia seguinte.
      */
     isAfter(a, b) {
         if (b > a) return true;
@@ -100,35 +102,29 @@ const Engine = {
 
     /**
      * Lê células de configuração do excel e retorna globalCtx.
-     * Nota: firstSeq e mapaTurnos vêm de SETTINGS (não do excel).
      */
     readGlobalConfig(matrix) {
         const c = SETTINGS.cells;
+
+        const rawCircular = c.ehCircular ? this.getCell(matrix, c.ehCircular) : null;
+        const ehCircular  = rawCircular === "true" || rawCircular === 1 || rawCircular === '1';
+
         return {
             codProg:        this.getCell(matrix, c.codProg),
             codLinha:       this.getCell(matrix, c.codLinha),
-            codIda:         String(this.getCell(matrix, c.codIda)          ?? ''),
-            codVolta:       String(this.getCell(matrix, c.codVolta)        ?? ''),
-            prepMins:       this.toMin(this.getCell(matrix, c.tempoPreparo))  ?? 0,
-            acesMins:       this.toMin(this.getCell(matrix, c.tempoAcesso))   ?? 0,
-            recoMins:       this.toMin(this.getCell(matrix, c.tempoRecolhe))  ?? 0,
+            codIda:         String(this.getCell(matrix, c.codIda)         ?? ''),
+            codVolta:       String(this.getCell(matrix, c.codVolta)       ?? ''),
+            prepMins:       this.toMin(this.getCell(matrix, c.tempoPreparo)) ?? 0,
+            acesMins:       this.toMin(this.getCell(matrix, c.tempoAcesso))  ?? 0,
+            recoMins:       this.toMin(this.getCell(matrix, c.tempoRecolhe)) ?? 0,
             firstSeq:       SETTINGS.primeiroCodViagem,
-            codLocalPegada: String(this.getCell(matrix, c.codLocalPegada)  ?? ''),
+            codLocalPegada: String(this.getCell(matrix, c.codLocalPegada) ?? ''),
+            ehCircular,
         };
     },
 
     /**
      * Resolve o número do turno para uma tabela com base em settings.mapaTurnos.
-     *
-     * O mapa é percorrido em ordem crescente de horário de corte.
-     * O turno retornado é o do primeiro corte cujo horário seja > tabStartMin.
-     * Se o início ultrapassar todos os cortes, retorna o valor do último.
-     *
-     * Exemplo com mapaTurnos = { '12:00': 1, '18:00': 2, '22:00': 3, '99:00': 4 }:
-     *   06:00 (360 min)  → turno 1
-     *   14:00 (840 min)  → turno 2
-     *   20:00 (1200 min) → turno 3
-     *   23:00 (1380 min) → turno 4
      */
     resolveturno(tabStartMin) {
         const mapa = SETTINGS.mapaTurnos;
@@ -140,19 +136,15 @@ const Engine = {
             if (tabStartMin < corteMin) return turno;
         }
 
-        // Fallback: último turno definido
         return entradas[entradas.length - 1]?.turno ?? 1;
     },
 
     /**
-     * Lê o intervalo de exceções de VIAGENS (settings.viagensConf.intervaloExcecoesViagens).
+     * Lê o intervalo de exceções de VIAGENS.
      *
      * Colunas (relativas ao início do intervalo):
-     *   0=carro  1=viagem  2=sentido  3=tipo  (critérios de identificação)
-     *   4=atividade  5=local  6=linha          (overrides de viagem)
-     *
-     * Precisa de ao menos um critério preenchido por linha.
-     * Matching é AND entre todos os critérios preenchidos.
+     *   0=carro  1=viagem  2=sentido  3=tipo  (critérios)
+     *   4=atividade  5=local  6=linha          (overrides)
      */
     readExcecoesViagens(matrix) {
         const rules = [];
@@ -162,7 +154,7 @@ const Engine = {
             const row = matrix[r];
             if (!row) continue;
 
-            const criterios = {};
+            const criterios  = {};
             const rawCarro   = row[start.col];
             const rawViagem  = row[start.col + 1];
             const rawSentido = row[start.col + 2];
@@ -175,11 +167,11 @@ const Engine = {
 
             if (Object.keys(criterios).length === 0) continue;
 
-            const overrides = {};
+            const overrides    = {};
             const overrideDefs = [
-                ['atividade', start.col + 4, v => String(v)     ],
-                ['local',     start.col + 5, v => String(v)     ],
-                ['linha',     start.col + 6, v => String(v)     ],
+                ['atividade', start.col + 4, v => String(v)],
+                ['local',     start.col + 5, v => String(v)],
+                ['linha',     start.col + 6, v => String(v)],
             ];
             for (const [field, colIdx, fn] of overrideDefs) {
                 const v = row[colIdx];
@@ -192,14 +184,11 @@ const Engine = {
     },
 
     /**
-     * Lê o intervalo de exceções de TABELAS (settings.viagensConf.intervaloExcecoesTabelas).
+     * Lê o intervalo de exceções de TABELAS.
      *
      * Colunas (relativas ao início do intervalo):
-     *   0=tabela (filtro, ex: "01A")
-     *   1=nome  2=inicio  3=fim  4=periodo
+     *   0=tabela  1=nome  2=inicio  3=fim  4=periodo
      *   5=saida_garagem  6=preparo  7=acesso  8=recolhe
-     *
-     * Retorna Map<tabName, overrides> para lookup O(1) no engine.
      */
     readExcecoesTabelas(matrix) {
         const map = new Map();
@@ -212,18 +201,18 @@ const Engine = {
             const rawTab = row[start.col];
             if (rawTab == null || rawTab === '') continue;
 
-            const tabKey = String(rawTab).trim().toUpperCase();
+            const tabKey    = String(rawTab).trim().toUpperCase();
             const overrides = {};
 
             const defs = [
-                ['nome',          start.col + 1, v => String(v).trim()      ],
-                ['inicio',        start.col + 2, v => this.toMin(v)         ],
-                ['fim',           start.col + 3, v => this.toMin(v)         ],
-                ['periodo',       start.col + 4, v => parseInt(v, 10)       ],
-                ['saidaGaragem',  start.col + 5, v => this.toMin(v)         ],
-                ['preparo',       start.col + 6, v => this.toMin(v)         ],
-                ['acesso',        start.col + 7, v => this.toMin(v)         ],
-                ['recolhe',       start.col + 8, v => this.toMin(v)         ],
+                ['nome',         start.col + 1, v => String(v).trim()],
+                ['inicio',       start.col + 2, v => this.toMin(v)   ],
+                ['fim',          start.col + 3, v => this.toMin(v)   ],
+                ['periodo',      start.col + 4, v => parseInt(v, 10) ],
+                ['saidaGaragem', start.col + 5, v => this.toMin(v)   ],
+                ['preparo',      start.col + 6, v => this.toMin(v)   ],
+                ['acesso',       start.col + 7, v => this.toMin(v)   ],
+                ['recolhe',      start.col + 8, v => this.toMin(v)   ],
             ];
 
             for (const [field, colIdx, fn] of defs) {
@@ -240,7 +229,6 @@ const Engine = {
 
     /**
      * Aplica regras de exceção de VIAGEM a uma viagem.
-     * Retorna objeto merged com overrides de todas as regras que batem.
      * @param {string} tipo - "P" (produtiva) ou "O" (ociosa/TT/intervalo/recolhe)
      */
     applyExcecoesViagens(rules, carroID, startMin, sentido, tipo) {
@@ -260,40 +248,36 @@ const Engine = {
     // =========================================================================
 
     /**
-     * Lê as linhas de TT (linhasTrocaTurno) para um carro.
+     * Lê as linhas de TT para um carro.
      * Retorna array de { min, sentido } em ordem cronológica.
      *
-     * Regras:
-     *  - Em cada linha: IDA tem prioridade; só lê VOLTA se IDA estiver vazio
-     *  - Linha N+1 só é lida se linha N tiver algo (não pula linhas)
-     *  - Horário deve corresponder a viagem real do sentido correto
-     *  - Ordem cronológica obrigatória (com suporte a virada de dia)
+     * Em modo circular o sentido registrado é sempre 'C' (todas as viagens
+     * circulares usam dir='C', então o validTripsSet também usa 'C').
      */
-    readTrocasTurno(matrix, colIda, colVolta, validTripsSet) {
+    readTrocasTurno(matrix, colIda, colVolta, validTripsSet, ehCircular) {
         const linhas = SETTINGS.viagensConf.linhasTrocaTurno;
         const result = [];
 
         for (let i = 0; i < linhas.length; i++) {
-            if (i > 0 && result.length < i) break; // linha anterior vazia
+            if (i > 0 && result.length < i) break;
 
-            const rowIdx = linhas[i] - 1;
+            const rowIdx   = linhas[i] - 1;
             const minIda   = this.toMin(matrix[rowIdx]?.[colIda]);
             const minVolta = this.toMin(matrix[rowIdx]?.[colVolta]);
 
             let min = null, sentido = null;
 
             if (minIda !== null) {
-                min = minIda; sentido = 'I';
+                min     = minIda;
+                sentido = ehCircular ? 'C' : 'I';
             } else if (minVolta !== null) {
-                min = minVolta; sentido = 'V';
+                min     = minVolta;
+                sentido = ehCircular ? 'C' : 'V';
             } else {
-                break; // linha vazia — para
+                break;
             }
 
-            // Deve existir viagem real com este horário e sentido
             if (!validTripsSet.has(`${min}_${sentido}`)) continue;
-
-            // Ordem cronológica
             if (result.length > 0 && !this.isAfter(result[result.length - 1].min, min)) continue;
 
             result.push({ min, sentido });
@@ -307,50 +291,113 @@ const Engine = {
     // =========================================================================
 
     /**
-     * Percorre colunas de um carro em zigzag e retorna viagens brutas.
+     * Percorre colunas de um carro e retorna viagens brutas.
      *
-     * Zigzag:
-     *   Viagem de IDA:   início = IDA[r],   fim = VOLTA[r]
-     *   Viagem de VOLTA: início = VOLTA[r], fim = IDA[r+1]
+     * Modo normal (zigzag IDA/VOLTA):
+     *   Viagem IDA:   start=colIda[r],   end=colVolta[r]
+     *   Viagem VOLTA: start=colVolta[r], end=colIda[r+1]
+     *   Texto em qualquer célula é ignorado (toMin retorna null).
      *
-     * Texto nas células é ignorado (toMin retorna null).
-     * Célula de fim vazia/texto → hasEnd=false → intervalo ou recolhe.
+     * Modo circular:
+     *   Viagem normal C:   colIda[r] tem hora, colVolta[r] vazio ou texto
+     *                      dir='C', start=colIda[r], end=colIda[r+1]
+     *   Meia viagem IDA:   colIda[r] tem hora E colVolta[r] tem hora
+     *                      dir = circularMeiaViagemConsisteSentido ? 'I' : 'C'
+     *                      start=colIda[r], end=colVolta[r]
+     *   Meia viagem VOLTA: colIda[r] vazio/texto, colVolta[r] tem hora
+     *                      dir = circularMeiaViagemConsisteSentido ? 'V' : 'C'
+     *                      start=colVolta[r], end=colIda[r+1]
+     *                      Só gerada se circularGeraMeiaViagem=true E
+     *                      for a primeira viagem ou primeira após intervalo.
      *
      * Retorna { dir, start, end|null, hasEnd, row }[]
      */
-    buildTrips(matrix, colIda, colVolta, rowStart, rowEnd) {
+    buildTrips(matrix, colIda, colVolta, rowStart, rowEnd, ehCircular) {
         const trips = [];
 
-        for (let r = rowStart; r <= rowEnd; r++) {
-            const vIda   = this.toMin(matrix[r]?.[colIda]);
-            const vVolta = this.toMin(matrix[r]?.[colVolta]);
+        if (!ehCircular) {
+            // ── Modo normal: zigzag IDA/VOLTA ──
+            for (let r = rowStart; r <= rowEnd; r++) {
+                const vIda   = this.toMin(matrix[r]?.[colIda]);
+                const vVolta = this.toMin(matrix[r]?.[colVolta]);
 
-            if (vIda !== null) {
-                trips.push({
-                    dir: 'I', start: vIda,
-                    end: vVolta,
-                    hasEnd: vVolta !== null,
-                    row: r,
-                });
+                if (vIda !== null) {
+                    trips.push({
+                        dir: 'I', start: vIda,
+                        end: vVolta,
+                        hasEnd: vVolta !== null,
+                        row: r,
+                    });
+                }
+
+                if (vVolta !== null) {
+                    const nextIda = (r < rowEnd) ? this.toMin(matrix[r + 1]?.[colIda]) : null;
+                    trips.push({
+                        dir: 'V', start: vVolta,
+                        end: nextIda,
+                        hasEnd: nextIda !== null,
+                        row: r,
+                    });
+                }
             }
+        } else {
+            // ── Modo circular ──
+            const geraMeiaViagem  = SETTINGS.circularGeraMeiaViagem           ?? true;
+            const consisteSentido = SETTINGS.circularMeiaViagemConsisteSentido ?? false;
+            const codMeiaIda      = consisteSentido ? 'I' : 'C';
+            const codMeiaVolta    = consisteSentido ? 'V' : 'C';
 
-            if (vVolta !== null) {
-                const nextIda = (r < rowEnd) ? this.toMin(matrix[r + 1]?.[colIda]) : null;
-                trips.push({
-                    dir: 'V', start: vVolta,
-                    end: nextIda,
-                    hasEnd: nextIda !== null,
-                    row: r,
-                });
+            let meiaVoltaPermitida = true;
+
+            for (let r = rowStart; r <= rowEnd; r++) {
+                const rawVolta  = matrix[r]?.[colVolta];
+                const vIda      = this.toMin(matrix[r]?.[colIda]);
+                const vVolta    = this.toMin(rawVolta);
+                // Célula volta com conteúdo não-hora (texto como RECO) — deve ser ignorada
+                const voltaTemTexto = rawVolta != null && rawVolta !== '' && vVolta === null;
+
+                if (vIda !== null && vVolta !== null) {
+                    // ── Meia viagem IDA: término prematuro com hora válida na volta ──
+                    trips.push({
+                        dir: codMeiaIda, start: vIda,
+                        end: vVolta,
+                        hasEnd: true,
+                        row: r,
+                    });
+                    meiaVoltaPermitida = false;
+
+                } else if (vIda !== null) {
+                    // ── Viagem circular normal (volta vazia ou com texto ignorado) ──
+                    const nextIda = (r < rowEnd) ? this.toMin(matrix[r + 1]?.[colIda]) : null;
+                    trips.push({
+                        dir: 'C', start: vIda,
+                        end: nextIda,
+                        hasEnd: nextIda !== null,
+                        row: r,
+                    });
+                    meiaVoltaPermitida = false;
+
+                } else if (vVolta !== null && !voltaTemTexto) {
+                    // ── Meia viagem VOLTA: início anormal ──
+                    if (geraMeiaViagem && meiaVoltaPermitida) {
+                        const nextIda = (r < rowEnd) ? this.toMin(matrix[r + 1]?.[colIda]) : null;
+                        trips.push({
+                            dir: codMeiaVolta, start: vVolta,
+                            end: nextIda,
+                            hasEnd: nextIda !== null,
+                            row: r,
+                        });
+                    }
+                    meiaVoltaPermitida = false;
+                }
+
+                // Viagem sem fim = intervalo → próxima tabela permite meia viagem VOLTA
+                const last = trips[trips.length - 1];
+                if (last && !last.hasEnd) {
+                    meiaVoltaPermitida = true;
+                }
             }
         }
-
-        // REMOVER AQUI, trips nao deve ser ordenado....
-        // Ordenar cronologicamente (IDA antes de VOLTA no mesmo horário)
-        // trips.sort((a, b) => {
-        //     if (a.start === b.start) return a.dir === 'I' ? -1 : 1;
-        //     return this.isAfter(a.start, b.start) ? -1 : 1;
-        // });
 
         return trips;
     },
@@ -363,16 +410,12 @@ const Engine = {
      * Divide trips em tabelas aplicando cortes de TT e intervalo.
      *
      * Cada tabela: { trips[], ttEnd, isLastTable, isIntervalo, isPostIntervalo }
-     *
-     * Corte por TT:        trip.start === tt.min && trip.dir === tt.sentido
-     * Corte por intervalo: viagem sem fim + tem viagens depois
-     * Recolhe:             viagem sem fim + não tem viagens depois (última tabela)
      */
     splitIntoTables(trips, trocas) {
         const tables      = [];
         let current       = [];
         let ttQueue       = [...trocas];
-        let postIntervalo = false; // flag para nomear próxima tabela
+        let postIntervalo = false;
 
         for (let i = 0; i < trips.length; i++) {
             const t = trips[i];
@@ -382,14 +425,14 @@ const Engine = {
                 const tt = ttQueue[0];
                 if (t.start === tt.min && t.dir === tt.sentido) {
                     tables.push({
-                        trips:          current,
-                        ttEnd:          tt,
-                        isLastTable:    false,
-                        isIntervalo:    false,
+                        trips:           current,
+                        ttEnd:           tt,
+                        isLastTable:     false,
+                        isIntervalo:     false,
                         isPostIntervalo: postIntervalo,
                     });
                     current       = [];
-                    postIntervalo = false; // pós-TT usa sequenciaNormal
+                    postIntervalo = false;
                     ttQueue.shift();
                 }
             }
@@ -401,27 +444,25 @@ const Engine = {
                 const hasMore = i < trips.length - 1;
 
                 if (hasMore) {
-                    // Intervalo: fecha tabela, próxima usa sequenciaPosIntervalo
                     tables.push({
-                        trips:          current,
-                        ttEnd:          null,
-                        isLastTable:    false,
-                        isIntervalo:    true,
+                        trips:           current,
+                        ttEnd:           null,
+                        isLastTable:     false,
+                        isIntervalo:     true,
                         isPostIntervalo: postIntervalo,
                     });
                     current       = [];
                     postIntervalo = true;
                 }
-                // Se !hasMore: recolhe — permanece em current, vai para última tabela
             }
         }
 
         if (current.length > 0) {
             tables.push({
-                trips:          current,
-                ttEnd:          null,
-                isLastTable:    true,
-                isIntervalo:    false,
+                trips:           current,
+                ttEnd:           null,
+                isLastTable:     true,
+                isIntervalo:     false,
                 isPostIntervalo: postIntervalo,
             });
         }
@@ -435,10 +476,6 @@ const Engine = {
 
     /**
      * Retorna a próxima letra disponível para nomear uma tabela.
-     *
-     * Primeira tabela → sempre sequenciaNormal[0] = "A"
-     * Pós-TT          → sequenciaNormal (B, D, E, F…) sem as já usadas
-     * Pós-intervalo   → sequenciaPosIntervalo (C, G, H, I…) sem as já usadas
      */
     nextLetter(isFirstTable, isPostIntervalo, usedLetters) {
         if (isFirstTable) return SETTINGS.sequenciaNormal[0];
@@ -454,11 +491,9 @@ const Engine = {
 
     /**
      * Monta contextos { trip, global } para todas as viagens de uma tabela.
-     * Inclui linha extra de encerramento (TT / intervalo / recolhe) se configurado.
      *
-     * tabOverrides (de readExcecoesTabelas) tem precedência sobre os valores
-     * globais para: nome, tabStart, tabEnd, turno, saidaGaragem, preparo,
-     * acesso e recolhe — permitindo customização completa por tabela.
+     * Local de encerramento (TT/intervalo/recolhe):
+     *   Prioridade: exceção de viagem → settings.atividades[X].local → regra geral por sentido
      */
     buildTableRows(opts) {
         const {
@@ -473,16 +508,14 @@ const Engine = {
         const firstTrip = trips[0];
         const lastTrip  = trips[trips.length - 1];
 
-        // ── NOME DA TABELA (pode ser renomeada pela exceção de tabela) ──
+        // ── NOME DA TABELA ──
         const resolvedTabName = tabOverrides.nome ?? tabName;
 
         // ── TURN ──
-        // Prioridade: exceção de tabela → mapaTurnos (por horário de início)
         const tabStartMinForTurn = tabOverrides.inicio ?? firstTrip.start;
         const turn = tabOverrides.periodo ?? this.resolveturno(tabStartMinForTurn);
 
         // ── PREPARO ──
-        // Prioridade: exceção de tabela → global
         const preparo = tabOverrides.preparo ?? globalCtx.prepMins;
 
         // ── ACESSO ──
@@ -491,7 +524,7 @@ const Engine = {
         // ── RECOLHE BASE ──
         const recoMinsBase = tabOverrides.recolhe ?? globalCtx.recoMins;
 
-        // ── INIC_GAR ── só primeira tabela; pode ser sobrescrito por exceção
+        // ── INIC_GAR ──
         let garageStart;
         if (tabOverrides.saidaGaragem != null) {
             garageStart = isFirstTable ? this.minToTime(tabOverrides.saidaGaragem) : '';
@@ -504,15 +537,14 @@ const Engine = {
         // ── COD_PEGADA ──
         const pegada = isFirstTable
             ? globalCtx.codLocalPegada
-            : (firstTrip.dir === 'I' ? codLocalIda : codLocalVolta);
+            : (firstTrip.dir === 'V' ? codLocalVolta : codLocalIda);
 
         // ── tabStart ──
         const tabStartMin = tabOverrides.inicio ?? firstTrip.start;
-        const tabStart = this.minToTime(tabStartMin);
+        const tabStart    = this.minToTime(tabStartMin);
 
         // ── tabEnd ──
         const recoExc  = this.applyExcecoesViagens(excViagensRules, carroID, lastTrip.start, lastTrip.dir, 'O');
-        // Exceção de tabela tem prioridade; excecão de viagem vem depois; depois global
         const recoMins = tabOverrides.recolhe ?? recoExc.recolhe ?? recoMinsBase;
 
         let tabEndMin;
@@ -542,9 +574,30 @@ const Engine = {
             arrival:        this.minToTime(endMin),
             activity,
             localCode,
-            codLinha:       excOverride?.linha       ?? null,
+            codLinha:       excOverride?.linha ?? null,
             isExcecaoLinha: !!(excOverride?.linha),
         });
+
+        /**
+         * Sentido oposto para encerramentos (intervalo/recolhe).
+         * 'C' e demais códigos circulares não invertem.
+         */
+        const dirOposto = (dir) => {
+            if (dir === 'I') return 'V';
+            if (dir === 'V') return 'I';
+            return dir;
+        };
+
+        /**
+         * Resolve o local de encerramento para uma atividade.
+         * Prioridade: exceção de viagem → settings.atividades[chave].local → codLocal por sentido
+         */
+        const localEncerramento = (excOverride, atividadeKey, dir) => {
+            if (excOverride?.local) return excOverride.local;
+            const atLocal = SETTINGS.atividades[atividadeKey]?.local;
+            if (atLocal != null) return atLocal;
+            return dir === 'V' ? codLocalVolta : codLocalIda;
+        };
 
         // ── Gerar linhas ──
         const rows = [];
@@ -555,13 +608,13 @@ const Engine = {
             const isLast = (i === trips.length - 1);
 
             const exc       = this.applyExcecoesViagens(excViagensRules, carroID, t.start, t.dir, 'P');
-            const localCode = exc.local ?? (t.dir === 'I' ? codLocalIda : codLocalVolta);
+            const localCode = exc.local ?? (t.dir === 'V' ? codLocalVolta : codLocalIda);
 
             rows.push({
                 trip: makeTripCtx(
                     t.dir, t.start, t.end ?? t.start,
                     String(seq),
-                    exc.atividade ?? SETTINGS.atividades.produtiva,
+                    exc.atividade ?? SETTINGS.atividades.produtiva.cod,
                     localCode, exc
                 ),
                 global: globalCtx,
@@ -570,28 +623,28 @@ const Engine = {
 
             // ── Linha de encerramento ──
             if (isLast) {
-                const dirOposto = t.dir === 'I' ? 'V' : 'I';
+                const dirEnc = dirOposto(t.dir);
 
                 // ── Troca de turno ──
                 if (ttEnd && SETTINGS.geraEntradaTrocaTurno) {
                     const excTT = this.applyExcecoesViagens(excViagensRules, carroID, ttEnd.min, ttEnd.sentido, 'O');
-                    const atTT  = excTT.atividade ?? SETTINGS.atividades.troca_turno;
-                    const lcTT  = excTT.local ?? atTT;
-                    rows.push({ trip: makeTripCtx(dirOposto, ttEnd.min, ttEnd.min, String(seq), atTT, lcTT, excTT), global: globalCtx });
+                    const atTT  = excTT.atividade ?? SETTINGS.atividades.troca_turno.cod;
+                    const lcTT  = localEncerramento(excTT, 'troca_turno', ttEnd.sentido);
+                    rows.push({ trip: makeTripCtx(ttEnd.sentido, ttEnd.min, ttEnd.min, String(seq), atTT, lcTT, excTT), global: globalCtx });
 
                 // ── Intervalo ──
-                } else if (isIntervalo) {
-                    const excInt = this.applyExcecoesViagens(excViagensRules, carroID, t.start, t.dir, 'O');
-                    const atInt  = excInt.atividade ?? SETTINGS.atividades.intervalo;
-                    const lcInt  = excInt.local ?? atInt;
-                    rows.push({ trip: makeTripCtx(dirOposto, t.start, t.start, String(seq), atInt, lcInt, excInt), global: globalCtx });
+                } else if (isIntervalo && SETTINGS.geraEntradaIntervalo) {
+                    const excInt = this.applyExcecoesViagens(excViagensRules, carroID, t.start, dirEnc, 'O');
+                    const atInt  = excInt.atividade ?? SETTINGS.atividades.intervalo.cod;
+                    const lcInt  = localEncerramento(excInt, 'intervalo', dirEnc);
+                    rows.push({ trip: makeTripCtx(dirEnc, t.start, t.start, String(seq), atInt, lcInt, excInt), global: globalCtx });
 
                 // ── Recolhe ──
                 } else if (isLastTable && SETTINGS.geraEntradaRecolhidas) {
                     const endMin = (t.end ?? t.start) + recoMins;
-                    const atReco = recoExc.atividade ?? SETTINGS.atividades.recolhe;
-                    const lcReco = recoExc.local ?? atReco;
-                    rows.push({ trip: makeTripCtx(dirOposto, t.end ?? t.start, endMin, String(seq), atReco, lcReco, recoExc), global: globalCtx });
+                    const atReco = recoExc.atividade ?? SETTINGS.atividades.recolhe.cod;
+                    const lcReco = localEncerramento(recoExc, 'recolhe', dirEnc);
+                    rows.push({ trip: makeTripCtx(dirEnc, t.end ?? t.start, endMin, String(seq), atReco, lcReco, recoExc), global: globalCtx });
                 }
             }
         }
@@ -610,9 +663,9 @@ const Engine = {
         const sheet  = workbook.Sheets[SETTINGS.guiaAnalise];
         const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
 
-        const globalCtx        = this.readGlobalConfig(matrix);
-        const excViagensRules  = this.readExcecoesViagens(matrix);
-        const excTabelasMap    = this.readExcecoesTabelas(matrix);
+        const globalCtx       = this.readGlobalConfig(matrix);
+        const excViagensRules = this.readExcecoesViagens(matrix);
+        const excTabelasMap   = this.readExcecoesTabelas(matrix);
 
         const vConf              = SETTINGS.viagensConf;
         const { start: vS, end: vE } = this.parseRange(vConf.intervaloGeral);
@@ -623,11 +676,11 @@ const Engine = {
             const colIda   = c;
             const colVolta = c + 1;
 
-            // Identificar carro (linha 1 da grade, linhaCarroID é 1-based)
+            // Identificar carro
             const rawID = matrix[vConf.linhaCarroID - 1]?.[colIda];
             if (rawID == null || rawID === '' || rawID === 0) continue;
             const rawStr = String(rawID);
-            if (rawStr.startsWith('=')) continue; // fórmula não resolvida
+            if (rawStr.startsWith('=')) continue;
             const carroID = rawStr.padStart(2, '0');
             if (carroID === '00') continue;
 
@@ -636,12 +689,12 @@ const Engine = {
             const codLocalIda   = String(matrix[lr]?.[colIda]   || '') || globalCtx.codIda;
             const codLocalVolta = String(matrix[lr]?.[colVolta] || '') || globalCtx.codVolta;
 
-            // Montar viagens via zigzag
-            const trips = this.buildTrips(matrix, colIda, colVolta, vS.row, vE.row);
+            // Montar viagens (modo normal ou circular)
+            const trips = this.buildTrips(matrix, colIda, colVolta, vS.row, vE.row, globalCtx.ehCircular);
             if (trips.length === 0) continue;
 
             const validTripsSet = new Set(trips.map(t => `${t.start}_${t.dir}`));
-            const trocas        = this.readTrocasTurno(matrix, colIda, colVolta, validTripsSet);
+            const trocas        = this.readTrocasTurno(matrix, colIda, colVolta, validTripsSet, globalCtx.ehCircular);
             const tables        = this.splitIntoTables(trips, trocas);
 
             const usedLetters = [];
@@ -651,7 +704,6 @@ const Engine = {
                 const tabName      = carroID + letter;
                 usedLetters.push(letter);
 
-                // Busca overrides de tabela (antes de renomear — chave pelo nome original)
                 const tabOverrides = excTabelasMap.get(tabName.toUpperCase()) ?? {};
 
                 const rows = this.buildTableRows({
