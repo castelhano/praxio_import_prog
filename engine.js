@@ -358,13 +358,14 @@ const Engine = {
 
                 if (vIda !== null && vVolta !== null) {
                     // ── Meia viagem IDA: término prematuro com hora válida na volta ──
+                    const nextIda = (r < rowEnd) ? this.toMin(matrix[r + 1]?.[colIda]) : null;
                     trips.push({
                         dir: codMeiaIda, start: vIda,
                         end: vVolta,
-                        hasEnd: true,
+                        hasEnd: nextIda !== null,
                         row: r,
                     });
-                    meiaVoltaPermitida = false;
+                    meiaVoltaPermitida = nextIda === null; // ← permite meia VOLTA se for intervalo
 
                 } else if (vIda !== null) {
                     // ── Viagem circular normal (volta vazia ou com texto ignorado) ──
@@ -379,12 +380,13 @@ const Engine = {
 
                 } else if (vVolta !== null && !voltaTemTexto) {
                     // ── Meia viagem VOLTA: início anormal ──
-                    if (geraMeiaViagem && meiaVoltaPermitida) {
+                    if (meiaVoltaPermitida) {
                         const nextIda = (r < rowEnd) ? this.toMin(matrix[r + 1]?.[colIda]) : null;
                         trips.push({
                             dir: codMeiaVolta, start: vVolta,
                             end: nextIda,
                             hasEnd: nextIda !== null,
+                            suppressed: !geraMeiaViagem,
                             row: r,
                         });
                     }
@@ -607,7 +609,7 @@ const Engine = {
             const t      = trips[i];
             const isLast = (i === trips.length - 1);
             
-            const skipProdutiva = isLast && !t.hasEnd;
+            const skipProdutiva = isLast && !t.hasEnd || t.suppressed;
 
             if(!skipProdutiva){ // se ultima viagem sera tratada pelos blocos 
                 
