@@ -5,9 +5,6 @@ const SETTINGS = {
 
     // ── Comportamento ─────────────────────────────────────────────────────────
 
-    // false = tabelas de 2ª pegada (DP) não recebem tempo de preparo
-    preparo2aPegadaDP: false,
-
     // Gera linha de encerramento com atividade troca_turno
     geraEntradaTrocaTurno: true,
     

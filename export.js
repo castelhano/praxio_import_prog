@@ -87,7 +87,7 @@ const Exporter = {
                     ? this.formatField(value, conf)
                     : (value ?? '');
             }).join(';');
-        }).join('\n');
+        }).join('\r\n');
 
         return `${headers}\n${body}`;
     },

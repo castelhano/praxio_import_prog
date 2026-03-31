@@ -353,8 +353,8 @@ const Engine = {
                 const rawVolta  = matrix[r]?.[colVolta];
                 const vIda      = this.toMin(matrix[r]?.[colIda]);
                 const vVolta    = this.toMin(rawVolta);
-                // Célula volta com conteúdo não-hora (texto como RECO) — deve ser ignorada
-                const voltaTemTexto = rawVolta != null && rawVolta !== '' && vVolta === null;
+                // Célula volta com conteúdo não-hora (texto como RECO) — deve ser ignorada AQUIIIIIIIIIIIIIII
+                // const voltaTemTexto = rawVolta != null && rawVolta !== '' && vVolta === null;
 
                 if (vIda !== null && vVolta !== null) {
                     // ── Meia viagem IDA: término prematuro com hora válida na volta ──
@@ -378,7 +378,7 @@ const Engine = {
                     });
                     meiaVoltaPermitida = false;
 
-                } else if (vVolta !== null && !voltaTemTexto) {
+                } else if (vVolta !== null) {
                     // ── Meia viagem VOLTA: início anormal ──
                     if (meiaVoltaPermitida) {
                         const nextIda = (r < rowEnd) ? this.toMin(matrix[r + 1]?.[colIda]) : null;
