@@ -15,7 +15,7 @@ const SETTINGS = {
     geraEntradaIntervalo: true,
 
     // Gera linha de recolhe ao final da última tabela do carro
-    geraEntradaRecolhidas: true,
+    geraEntradaRecolhidas: false,
 
     // Aplica formatação de campo (padding/alinhamento) também no CSV
     aplicarFormatacaoNoCsv: true,
@@ -41,7 +41,7 @@ const SETTINGS = {
     //   Código de sentido para viagem iniciada na coluna VOLTA.
     //   null = usa 'C'
     //   Só gerada se for a primeira viagem do carro ou primeira após intervalo.
-    circularGeraMeiaViagem:              true,
+    circularGeraMeiaViagem:              false,
     circularMeiaViagemConsisteSentido:   true,
 
     // ── Mapa de turnos: horário de corte → número do turno ────────────────────

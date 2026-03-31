@@ -606,21 +606,26 @@ const Engine = {
         for (let i = 0; i < trips.length; i++) {
             const t      = trips[i];
             const isLast = (i === trips.length - 1);
+            
+            const skipProdutiva = isLast && !t.hasEnd;
 
-            const exc       = this.applyExcecoesViagens(excViagensRules, carroID, t.start, t.dir, 'P');
-            const localCode = exc.local ?? (t.dir === 'V' ? codLocalVolta : codLocalIda);
-
-            rows.push({
-                trip: makeTripCtx(
-                    t.dir, t.start, t.end ?? t.start,
-                    String(seq),
-                    exc.atividade ?? SETTINGS.atividades.produtiva.cod,
-                    localCode, exc
-                ),
-                global: globalCtx,
-            });
-            seq++;
-
+            if(!skipProdutiva){ // se ultima viagem sera tratada pelos blocos 
+                
+                const exc       = this.applyExcecoesViagens(excViagensRules, carroID, t.start, t.dir, 'P');
+                const localCode = exc.local ?? (t.dir === 'V' ? codLocalVolta : codLocalIda);
+                
+                rows.push({
+                    trip: makeTripCtx(
+                        t.dir, t.start, t.end ?? t.start,
+                        String(seq),
+                        exc.atividade ?? SETTINGS.atividades.produtiva.cod,
+                        localCode, exc
+                    ),
+                    global: globalCtx,
+                });
+                seq++;
+            }
+            
             // ── Linha de encerramento ──
             if (isLast) {
                 const dirEnc = dirOposto(t.dir);
