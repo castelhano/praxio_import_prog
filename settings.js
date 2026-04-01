@@ -1,5 +1,33 @@
 const SETTINGS = {
 
+    camposDisponiveis: [
+        'COD_PROGRAMAÇÃO',
+        'SERVICO_TAB',
+        'TURNO',
+        'INICIO_SERVICO',
+        'FIM_SERVICO',
+        'COD_LOCAL_MOT',
+        'COD_LOCAL_COB',
+        'PREPARO_MOT',
+        'PREPARO_COB',
+        'RETORNO_GAR',
+        'ENTREGA_FERIAS',
+        'SAIDA_GAR',
+        'SENTIDO',
+        'COD_VIAGENS',
+        'HORARIO_SAIDA',
+        'HORARIO_CHEGADA',
+        'COD_ATIVIDADE',
+        'COD_LOCALIDADE',
+        'COD_LINHA',
+        'DURACAO_ATIVIDADE',
+        'SUFIXO',
+        'TIPO_HORARIO',
+        'DUPLA_PEGADA',
+        'IDENTIFICADOR',
+        'SERV_RENDICAO'
+    ],
+
     // ── Guia da planilha a processar ──────────────────────────────────────────
     guiaAnalise: 'dados',
 
@@ -26,27 +54,17 @@ const SETTINGS = {
     // Gera meia viagem quando o carro inicia/termina no meio do percurso.
     // Só tem efeito quando ehCircular=true na célula cells.ehCircular da planilha.
     //
-    // circularGeraMeiaViagem:
-    //   true  = gera entrada de meia viagem (VOLTA ou término prematuro de IDA)
-    //   false = ignora lançamentos na coluna VOLTA em linhas circulares
-    //
-    // circularCodSentidoMeiaViagemIda:
-    //   Código de sentido para término prematuro (colIda e colVolta preenchidos).
-    //   null = usa 'C' (mesmo código das viagens normais circulares)
-    //
-    // circularCodSentidoMeiaViagemVolta:
-    //   Código de sentido para viagem iniciada na coluna VOLTA.
-    //   null = usa 'C'
-    //   Só gerada se for a primeira viagem do carro ou primeira após intervalo.
-    circularGeraMeiaViagem:              false,
+    // circularMeiaViagemConsisteSentido:
+    //   true  = usa sentido I (ida) ou V (volta) dependendo da coluna da viagem
+    //   false = usa C (circular) para todas as viagens, inclusive meias viagens
+    circularGeraMeiaViagem:              true,
     circularMeiaViagemConsisteSentido:   true,
 
     // ── Mapa de turnos: horário de corte → número do turno ────────────────────
     mapaTurnos: {
         '12:00': 1,
-        '18:00': 2,
-        '22:00': 3,
-        '99:00': 4,
+        '19:00': 2,
+        '99:00': 4, // sentinela — captura qualquer horário restante 
     },
 
     // ── Códigos de atividade ──────────────────────────────────────────────────
@@ -77,33 +95,33 @@ const SETTINGS = {
 
     // ── Configuração da grade de viagens ──────────────────────────────────────
     viagensConf: {
-        intervaloGeral:           'I4:AV28',
-        intervaloExcecoesViagens: 'A35:G55',
-        intervaloExcecoesTabelas: 'L35:T55',
+        intervaloGeral:           'I4:AV33',
+        intervaloExcecoesViagens: 'A40:G60',
+        intervaloExcecoesTabelas: 'L40:T60',
 
         linhaCarroID:    1,
         linhaSentido:    2,
         linhaLocalidade: 3,
 
-        linhasTrocaTurno: [29, 30, 31],
+        linhasTrocaTurno: [34, 35, 36],
     },
 
     // ── Layout de saída ───────────────────────────────────────────────────────
     layout: [
-        { field: 'COD_PROG',   size: 7,  pad: ' ', align: 'L',           resolve: (ctx) => ctx.global.codProg       },
-        { field: 'TAB',        size: 3,  pad: ' ', align: 'L',           resolve: (ctx) => ctx.trip.tab             },
-        { field: 'TURN',       size: 1,  pad: ' ', align: 'L',           resolve: (ctx) => ctx.trip.turn            },
-        { field: 'INICIO',     size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.tabStart    },
-        { field: 'TERM',       size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.tabEnd      },
-        { field: 'COD_PEGADA', size: 5,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.pegada          },
-        { field: 'PREPARO',    size: 2,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.preparo         },
-        { field: 'INIC_GAR',   size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.garageStart },
-        { field: 'SENTIDO',    size: 1,  pad: ' ', align: 'L',           resolve: (ctx) => ctx.trip.direction       },
-        { field: 'COD',        size: 2,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.seq             },
-        { field: 'SAIDA',      size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.departure   },
-        { field: 'CHEGADA',    size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.arrival     },
-        { field: 'ATIV',       size: 2,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.activity        },
-        { field: 'COD_LOCAL',  size: 5,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.localCode       },
-        { field: 'COD_LINHA',  size: 3,  pad: ' ', align: 'R',           resolve: (ctx) => ctx.trip.isExcecaoLinha ? ctx.trip.codLinha : '' },
+        { field: 'COD_PROGRAMAÇÃO', size: 8,  pad: ' ', align: 'L',           resolve: (ctx) => ctx.global.codProg       },
+        { field: 'SERVICO_TAB',     size: 5,  pad: ' ', align: 'L',           resolve: (ctx) => ctx.trip.tab             },
+        { field: 'TURNO',           size: 1,  pad: ' ', align: 'L',           resolve: (ctx) => ctx.trip.turn            },
+        { field: 'INICIO_SERVICO',  size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.tabStart    },
+        { field: 'FIM_SERVICO',     size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.tabEnd      },
+        { field: 'COD_LOCAL_MOT',   size: 6,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.pegada          },
+        { field: 'PREPARO_MOT',     size: 2,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.preparo         },
+        { field: 'SAIDA_GAR',       size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.garageStart },
+        { field: 'SENTIDO',         size: 1,  pad: ' ', align: 'L',           resolve: (ctx) => ctx.trip.direction       },
+        { field: 'COD_VIAGENS',     size: 2,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.seq             },
+        { field: 'HORARIO_SAIDA',   size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.departure   },
+        { field: 'HORARIO_CHEGADA', size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.arrival     },
+        { field: 'COD_ATIVIDADE',   size: 2,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.activity        },
+        { field: 'COD_LOCALIDADE',  size: 5,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.localCode       },
+        { field: 'COD_LINHA',       size: 3,  pad: ' ', align: 'R',           resolve: (ctx) => ctx.trip.isExcecaoLinha ? ctx.trip.codLinha : '' },
     ],
 };

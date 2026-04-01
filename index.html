@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html data-bs-theme="dark">
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Conversor OSO</title>
     <link rel="stylesheet" href="static/bootstrap.min.css">
     <link rel="stylesheet" href="static/bs_icons/font/bootstrap-icons.min.css">
@@ -14,81 +16,129 @@
                 <div class="p-2 text-bg-primary-matte hl-info rounded-end my-3">
                     <p class="m-0"><b>Utilização:</b> Carregar arquivo <code>xlsx</code> pre-formatado e configurado, selecionar tipo de exportação (txt ou csv)</p>
                     <p class="m-0"><b>Dica:</b> <span class="badge text-bg-warning-matte">ALT+K</span> exibe atalhos disponíveis na página</p>
+                    <p class="m-0"><b>Dica:</b> Após configurar o <code>layout</code> no arquivo <code>settings.js</code> precione <button type="button" class="btn btn-sm btn-purple-matte small" data-bs-toggle="modal" data-bs-target="#schemaModal">Ver schema</button> para faciliar a configuração do módulo de importação no glóbus.</p>
                     <hr class="my-2">
                     <p class="m-0"><b class="text-danger-matte">Atenção:</b> Antes de importar é necessário ter configurado previamente o módulo de escala no Globus em <code class="ms-1">Utilitários / Configurações / Configurações de Importação</code></p>
                 </div>
             </div>
         </div>
         <div class="row g-2">
-            <div class="col">
+            <div class="col-lg">
                 <input type="file" id="fileInput" class="form-control" accept=".xlsx" />
             </div>
-            <div class="col">
+            <div class="col-lg">
                 <select id="formatSelect" class="form-select">
                     <option value="txt">Exportar TXT</option>
                     <option value="csv">Exportar CSV</option>
                 </select>
             </div>
-            <div class="col"><button onclick="handleProcess()" class="btn btn-primary-matte">Processar</button></div>
+            <div class="col-lg">
+                <button onclick="handleProcess()" class="btn btn-primary-matte">Processar</button>
+                <button type="button" class="btn btn-purple-matte" data-bs-toggle="modal" data-bs-target="#schemaModal">Ver schema</button>
+            </div>
         </div>
         <hr class="my-4">
         <div class="p-2 text-bg-warning-matte hl-warning rounded-end my-3">
             <b>Configurações da engine:</b>
             <p class="m-0 small"><i class="bi bi-exclamation-triangle-fill text-danger-matte me-1"></i><b class="me-1 text-danger-matte">Atenção:</b> Alterar estes arquivos pode corromper a lógica do app, ajuste com cautela.</p>
             <hr class="my-2">
-            <table class="table table-sm caption-top">
-                <caption class="p-0 small">Arquivos do motor de conversão</caption>
-                <thead>
-                    <tr>
-                        <th>File</th>
-                        <th>Description</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td class="fit pe-5"><code>settings.js</code></td>
-                        <td>Arquivo principal de configurações, ver detalhes mais abaixo</td>
-                    </tr>
-                    <tr>
-                        <td class="fit pe-5"><code>engine.js</code></td>
-                        <td>Motor de processamento</td>
-                    </tr>
-                    <tr>
-                        <td class="fit pe-5"><code>export.js</code></td>
-                        <td>Exportador de arquivo</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="table table-sm caption-top">
+                    <caption class="p-0 small">Arquivos do motor de conversão</caption>
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="fit pe-5"><code>settings.js</code></td>
+                            <td>Arquivo principal de configurações, ver detalhes mais abaixo</td>
+                        </tr>
+                        <tr>
+                            <td class="fit pe-5"><code>engine.js</code></td>
+                            <td>Motor de processamento</td>
+                        </tr>
+                        <tr>
+                            <td class="fit pe-5"><code>export.js</code></td>
+                            <td>Exportador de arquivo</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
             <h5 class="mb-1">settings.js</h5>
             <div class="row">
-                <div class="col col-1"><code>guiaAnalise</code>:</div><div class="col-11">Nome da "guia" do arquivo a ser tratada pelo engine</div>
-                <div class="col col-1"><code>atividades</code>:</div><div class="col-11">Códigos do módulo de escala para tipo de viagem (produtiva, troca turno, recolhe)</div>
-                <div class="col col-1"><code>cells</code>:</div><div class="col-11">Células de referência na planilha para dados de importação (nome planejamento, cod linha, tempos de acesso / recolhida, etc)</div>
-                <div class="col col-1"><code>layout</code>:</div><div class="col-11">Dicionário com layout definido para arquivos de importação</div>
+                <div class="col col-lg-1"><code>guiaAnalise</code>:</div><div class="col-11">Nome da "guia" do arquivo a ser tratada pelo engine</div>
+                <div class="col col-lg-1"><code>atividades</code>:</div><div class="col-11">Códigos do módulo de escala para tipo de viagem (produtiva, troca turno, recolhe)</div>
+                <div class="col col-lg-1"><code>cells</code>:</div><div class="col-11">Células de referência na planilha para dados de importação (nome planejamento, cod linha, tempos de acesso / recolhida, etc)</div>
+                <div class="col col-lg-1"><code>layout</code>:</div><div class="col-11">Dicionário com layout definido para arquivos de importação</div>
             </div>
             <hr>
             <div class="row">
-                <div class="col col-12">Cada entrada no array de layout representa um dado no arquivo de exportação, ex:</div>
-                <div class="col col-12"><div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "COD_PROG", size: 7, pad: " ", align: "L", resolve: (ctx) => ctx.global.codProg }</code></div></div>
-                <div class="col col-1"><code>field:</code></div><div class="col-11">Nome no campo (csv)</div>
-                <div class="col col-1"><code>size:</code></div><div class="col-11">Tamanho mínimo (caracteres) a ser ocupado nos arquivos de exportação</div>
-                <div class="col col-1"><code>pad:</code></div><div class="col-11">String a ser usada para completar retorno compativel com tamanho definido</div>
-                <div class="col col-1"><code>align:</code></div><div class="col-11">Define se complemento será aplicado no inicio <code>R</code> ou no fim <code>L</code> do retorno</div>
-                <div class="col col-1"><code>resolve:</code></div><div class="col-11">Função (ou string) a ser usado no campo</div>
+                <div class="col-12">Cada entrada no array de layout representa um dado no arquivo de exportação, ex:</div>
+                <div class="col-12"><div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "COD_PROG", size: 7, pad: " ", align: "L", resolve: (ctx) => ctx.global.codProg }</code></div></div>
+                <div class="col col-lg-1"><code>field:</code></div><div class="col-11">Nome no campo (csv)</div>
+                <div class="col col-lg-1"><code>size:</code></div><div class="col-11">Tamanho mínimo (caracteres) a ser ocupado nos arquivos de exportação</div>
+                <div class="col col-lg-1"><code>pad:</code></div><div class="col-11">String a ser usada para completar retorno compativel com tamanho definido</div>
+                <div class="col col-lg-1"><code>align:</code></div><div class="col-11">Define se complemento será aplicado no inicio <code>R</code> ou no fim <code>L</code> do retorno</div>
+                <div class="col col-lg-1"><code>resolve:</code></div><div class="col-11">Função (ou string) a ser usado no campo</div>
                 <hr>
-                <div class="col-12">Resolve pode fazer referência a uma entrada de contexto do engine <code>ctx.suaFuncao</code> ou uma função simples, exemplos:</div>
+                <div class="col-12">Resolve pode fazer referência a uma entrada de contexto do engine <code>ctx.valorDoCampo</code> ou uma função, exemplos:</div>
                 <div class="col col-12">
                     <div class="mt-2 small">Exemplo 1 - Conteúdo Fixo</div>
                     <div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "FOO", size: 3, pad: "0", align: "L", resolve: (ctx) => "BAR" }</code></div>
                 </div>
                 <div class="col col-12">
-                    <div class="mt-2 small">Exemplo 2 - Função de contexto</div>
-                    <div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "FEI", size: 3, pad: "0", align: "L", resolve: (ctx) => ctx.global.feiFunction }</code></div>
-                    <small>Neste caso deve ser criado a função <code>feiFunction</code> no arquivo de <code>engine.js</code></small>
+                    <div class="mt-2 small">Exemplo 2 - Entrada de contexto</div>
+                    <div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "FEI", size: 3, pad: "0", align: "L", resolve: (ctx) => ctx.global.fei }</code></div>
+                    <small>Neste caso deve ser adicionado ao contexto <b>global</b> <code>fei</code> no arquivo <code>engine.js</code></small>
+                </div>
+                <div class="col col-12">
+                    <div class="mt-2 small">Exemplo 3 - Retorno de função</div>
+                    <div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "FEI", size: 3, pad: "0", align: "L", resolve: minhaFuncao(ctx) }</code></div>
                 </div>
             </div>
         </div>
     </div>
+    
+    
+    <!-- modal com schema -->
+    <div class="modal fade" id="schemaModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">Configurações de campo</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>            
+                <div class="modal-body pt-2">
+                    <!-- Alerta fixo no topo do body -->
+                    <div id="modalSchemaAlert" class="text-bg-danger-matte p-2 mb-2 rounded d-none">
+                        <ul id="modalSchemaErrors" class="ps-3 m-0 small"></ul>
+                    </div>
+                    <div class="table-responsive border" style="max-height: 70vh; overflow-y: auto;"> 
+                        <table class="table table-sm mb-0" style="border-collapse: separate; border-spacing: 0;">
+                            <thead class="sticky-top" style="top: 0; z-index: 10;">
+                                <tr>
+                                    <th class="text-bg-primary-matte py-2">Field</th>
+                                    <th class="text-bg-primary-matte py-2">Pos</th>
+                                    <th class="text-bg-primary-matte py-2">Size</th>
+                                    <th class="text-bg-primary-matte py-2">Mask</th>
+                                </tr>
+                            </thead>
+                            <tbody class="small" id="schemaTableTbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary-matte" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-sm btn-primary-matte" onclick="exportSchemaToCSV()">CSV</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     
     
     <script src="settings.js"></script>
@@ -107,6 +157,107 @@
             icon: 'bi bi-arrow-clockwise me-2',
             desc: 'Limpa e recarrega página'
         });
+        
+        // constroi schema no modal
+        function renderSchemaTable() {
+            const tbody = document.getElementById('schemaTableTbody');
+            const alertDiv = document.getElementById('modalSchemaAlert');
+            const errorList = document.getElementById('modalSchemaErrors');
+            const typeMap = { hour: "HH:MM" };
+            
+            let currentPos = 1;
+            let errors = [];
+            
+            tbody.innerHTML = '';
+            errorList.innerHTML = '';
+            alertDiv.classList.add('d-none');
+            
+            // 1. Validar se todos os itens do layout existem nos campos disponíveis
+            SETTINGS.layout.forEach(item => {
+                if (!SETTINGS.camposDisponiveis.includes(item.field)) {
+                    errors.push(`Campo <strong>${item.field}</strong> definido no layout não existe nos campos disponiveis`);
+                }
+                if (item.type && !typeMap[item.type]) {
+                    errors.push(`Tipo <strong>${item.type}</strong> no campo ${item.field} não possui máscara mapeada`);
+                }
+                if (!item.size || item.size <= 0) {
+                    errors.push(`Campo <strong>${item.field}</strong> possui tamanho (size) inválido`);
+                }
+            });
+            
+            // 2. Renderizar Tabela
+            SETTINGS.camposDisponiveis.forEach(campoNome => {
+                const layoutConfig = SETTINGS.layout.find(item => item.field === campoNome);
+                const tr = document.createElement('tr');
+                
+                if (layoutConfig) {
+                    const mask = layoutConfig.type ? (typeMap[layoutConfig.type] || '') : '';
+                    tr.innerHTML = `
+                <td>${campoNome}</td>
+                <td>${currentPos}</td>
+                <td>${layoutConfig.size}</td>
+                <td>${mask}</td>
+            `;
+                    currentPos += layoutConfig.size;
+                } else {
+                    tr.innerHTML = `
+                <td class="text-bg-purple-matte">${campoNome}</td>
+                <td class="text-bg-purple-matte">-</td>
+                <td class="text-bg-purple-matte">-</td>
+                <td class="text-bg-purple-matte">-</td>
+            `;
+                }
+                tbody.appendChild(tr);
+            });
+            
+            // 3. Exibir erros se houver
+            if (errors.length > 0) {
+                errors.forEach(err => {
+                    const li = document.createElement('li');
+                    li.innerHTML = err;
+                    errorList.appendChild(li);
+                });
+                alertDiv.classList.remove('d-none');
+            }
+        }        
+        renderSchemaTable();
+        
+        function exportSchemaToCSV() {
+            const typeMap = { hour: "HH:MM" };
+            let currentPos = 1;
+            
+            // Cabeçalho do CSV
+            let csvContent = "Campo;Posicao Inicial;Tamanho;Mascara\n";
+            
+            // Filtramos apenas os campos que estão no layout (seguindo sua regra)
+            SETTINGS.layout.forEach(item => {
+                // Apenas processa se o campo existir nos disponíveis
+                if (SETTINGS.camposDisponiveis.includes(item.field)) {
+                    const mask = item.type ? (typeMap[item.type] || "") : "";
+                    
+                    // Monta a linha: Nome;Inicio;Tamanho;Mascara
+                    csvContent += `${item.field};${currentPos};${item.size};${mask}\n`;
+                    
+                    // Incrementa a posição para o próximo campo
+                    currentPos += item.size;
+                }
+            });
+            
+            // Cria o arquivo para download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", "layout_schema.csv");
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        
         
         async function handleProcess() {
             const fileInput = document.getElementById('fileInput');
