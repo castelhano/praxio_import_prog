@@ -52,7 +52,7 @@ const SETTINGS = {
     // ── Configuração de linha circular ────────────────────────────────────────
     //
     // Gera meia viagem quando o carro inicia/termina no meio do percurso.
-    // Só tem efeito quando ehCircular=true na célula cells.ehCircular da planilha.
+    // Só tem efeito quando ehCircular=[true, 1, sim] na célula cells.ehCircular da planilha.
     //
     // circularMeiaViagemConsisteSentido:
     //   true  = usa sentido I (ida) ou V (volta) dependendo da coluna da viagem
@@ -62,7 +62,7 @@ const SETTINGS = {
 
     // ── Mapa de turnos: horário de corte → número do turno ────────────────────
     mapaTurnos: {
-        '12:00': 1,
+        '09:00': 1,
         '19:00': 2,
         '99:00': 4, // sentinela — captura qualquer horário restante 
     },
@@ -90,7 +90,7 @@ const SETTINGS = {
         tempoAcesso:     'F7',
         tempoRecolhe:    'F8',
         codLocalPegada:  'F9',
-        ehCircular:      'F10',  // true ou 1 = linha circular; vazio ou 0 = normal
+        ehCircular:      'F10',  // true, 1 ou sim = linha circular; qualquer outro valor = comportamento padrão
         layoutColunas:   'F11',  // código do layout de colunas da grade de viagens (padrão: '1')
     },
 

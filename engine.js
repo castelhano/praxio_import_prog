@@ -109,7 +109,7 @@ const Engine = {
         const c = SETTINGS.cells;
 
         const rawCircular = c.ehCircular ? this.getCell(matrix, c.ehCircular) : null;
-        const ehCircular  = rawCircular === "true" || rawCircular === 1 || rawCircular === '1';
+        const ehCircular  = ["true", "sim", 1, "1"].includes(rawCircular);
 
         // Resolve layout de colunas: lê F11, busca em settings.layoutColunas, cai no '1' se ausente
         const rawLayout    = c.layoutColunas ? this.getCell(matrix, c.layoutColunas) : null;

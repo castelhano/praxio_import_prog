@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-bs-theme="dark">
+<html lang="pt-BR" data-bs-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,18 +9,12 @@
     <link rel="stylesheet" href="static/app.css">
 </head>
 <body>
-    <h3 class="text-bg-primary-matte p-2 m-0"><span class="text-secondary">Praxio:</span> <span class="">Importar Planejamento</span></h3>
+    <h3 class="text-bg-primary-matte p-2 m-0">Importação de Planejamento</h3>
     <div class="container-fluid">
-        <div class="row">
-            <div class="col">
-                <div class="p-2 text-bg-primary-matte hl-info rounded-end my-3">
-                    <p class="m-0"><b>Utilização:</b> Carregar arquivo <code>xlsx</code> pre-formatado e configurado, selecionar tipo de exportação (txt ou csv)</p>
-                    <p class="m-0"><b>Dica:</b> <span class="badge text-bg-warning-matte">ALT+K</span> exibe atalhos disponíveis na página</p>
-                    <p class="m-0"><b>Dica:</b> Após configurar o <code>layout</code> no arquivo <code>settings.js</code> precione <button type="button" class="btn btn-sm btn-purple-matte small" data-bs-toggle="modal" data-bs-target="#schemaModal">Ver schema</button> para faciliar a configuração do módulo de importação no glóbus.</p>
-                    <hr class="my-2">
-                    <p class="m-0"><b class="text-danger-matte">Atenção:</b> Antes de importar é necessário ter configurado previamente o módulo de escala no Globus em <code class="ms-1">Utilitários / Configurações / Configurações de Importação</code></p>
-                </div>
-            </div>
+        <div class="text-bg-warning-matte my-3 px-3 py-2 hl-warning rounded">
+            <b>Atenção:</b> Para importação de programação no <code>Globus</code> é necessário antes ter criado previamente a entrada na tela de programação.
+            <hr class="my-2">
+            <p class="mb-1">Em caso de dúvidas use o botão <b>Manual</b> abaixo para conferir detalhes de utilização do sistema além das possiveis configurações</p>
         </div>
         <div class="row g-2">
             <div class="col-lg">
@@ -32,72 +26,10 @@
                     <option value="csv">Exportar CSV</option>
                 </select>
             </div>
-            <div class="col-lg">
-                <button onclick="handleProcess()" class="btn btn-primary-matte">Processar</button>
-                <button type="button" class="btn btn-purple-matte" data-bs-toggle="modal" data-bs-target="#schemaModal">Ver schema</button>
-            </div>
-        </div>
-        <hr class="my-4">
-        <div class="p-2 text-bg-warning-matte hl-warning rounded-end my-3">
-            <b>Configurações da engine:</b>
-            <p class="m-0 small"><i class="bi bi-exclamation-triangle-fill text-danger-matte me-1"></i><b class="me-1 text-danger-matte">Atenção:</b> Alterar estes arquivos pode corromper a lógica do app, ajuste com cautela.</p>
-            <hr class="my-2">
-            <div class="table-responsive">
-                <table class="table table-sm caption-top">
-                    <caption class="p-0 small">Arquivos do motor de conversão</caption>
-                    <thead>
-                        <tr>
-                            <th>File</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="fit pe-5"><code>settings.js</code></td>
-                            <td>Arquivo principal de configurações, ver detalhes mais abaixo</td>
-                        </tr>
-                        <tr>
-                            <td class="fit pe-5"><code>engine.js</code></td>
-                            <td>Motor de processamento</td>
-                        </tr>
-                        <tr>
-                            <td class="fit pe-5"><code>export.js</code></td>
-                            <td>Exportador de arquivo</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <h5 class="mb-1">settings.js</h5>
-            <div class="row">
-                <div class="col col-lg-1"><code>guiaAnalise</code>:</div><div class="col-11">Nome da "guia" do arquivo a ser tratada pelo engine</div>
-                <div class="col col-lg-1"><code>atividades</code>:</div><div class="col-11">Códigos do módulo de escala para tipo de viagem (produtiva, troca turno, recolhe)</div>
-                <div class="col col-lg-1"><code>cells</code>:</div><div class="col-11">Células de referência na planilha para dados de importação (nome planejamento, cod linha, tempos de acesso / recolhida, etc)</div>
-                <div class="col col-lg-1"><code>layout</code>:</div><div class="col-11">Dicionário com layout definido para arquivos de importação</div>
-            </div>
-            <hr>
-            <div class="row">
-                <div class="col-12">Cada entrada no array de layout representa um dado no arquivo de exportação, ex:</div>
-                <div class="col-12"><div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "COD_PROG", size: 7, pad: " ", align: "L", resolve: (ctx) => ctx.global.codProg }</code></div></div>
-                <div class="col col-lg-1"><code>field:</code></div><div class="col-11">Nome no campo (csv)</div>
-                <div class="col col-lg-1"><code>size:</code></div><div class="col-11">Tamanho mínimo (caracteres) a ser ocupado nos arquivos de exportação</div>
-                <div class="col col-lg-1"><code>pad:</code></div><div class="col-11">String a ser usada para completar retorno compativel com tamanho definido</div>
-                <div class="col col-lg-1"><code>align:</code></div><div class="col-11">Define se complemento será aplicado no inicio <code>R</code> ou no fim <code>L</code> do retorno</div>
-                <div class="col col-lg-1"><code>resolve:</code></div><div class="col-11">Função (ou string) a ser usado no campo</div>
-                <hr>
-                <div class="col-12">Resolve pode fazer referência a uma entrada de contexto do engine <code>ctx.valorDoCampo</code> ou uma função, exemplos:</div>
-                <div class="col col-12">
-                    <div class="mt-2 small">Exemplo 1 - Conteúdo Fixo</div>
-                    <div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "FOO", size: 3, pad: "0", align: "L", resolve: (ctx) => "BAR" }</code></div>
-                </div>
-                <div class="col col-12">
-                    <div class="mt-2 small">Exemplo 2 - Entrada de contexto</div>
-                    <div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "FEI", size: 3, pad: "0", align: "L", resolve: (ctx) => ctx.global.fei }</code></div>
-                    <small>Neste caso deve ser adicionado ao contexto <b>global</b> <code>fei</code> no arquivo <code>engine.js</code></small>
-                </div>
-                <div class="col col-12">
-                    <div class="mt-2 small">Exemplo 3 - Retorno de função</div>
-                    <div class="border rounded text-bg-secondary-matte p-2 my-1"><code>{ field: "FEI", size: 3, pad: "0", align: "L", resolve: minhaFuncao(ctx) }</code></div>
-                </div>
+            <div class="col-12 text-end">
+                <button onclick="handleProcess()" class="btn btn-primary-matte"><i class="bi bi-code-slash me-2"></i>Processar</button>
+                <button type="button" class="btn btn-purple-matte" data-bs-toggle="modal" data-bs-target="#schemaModal"><i class="bi bi-braces-asterisk me-2"></i>Ver schema</button>
+                <a id="man_link" class="btn btn-orange-matte" href="./manual.html"><i class="bi bi-question-circle-fill me-2"></i>Manual</a>
             </div>
         </div>
     </div>
@@ -156,6 +88,12 @@
         }, {
             icon: 'bi bi-arrow-clockwise me-2',
             desc: 'Limpa e recarrega página'
+        });
+        appKeyMap.bind('f1', ()=>{
+            document.getElementById('man_link').click()
+        }, {
+            icon: 'bi bi-question-circle-fill me-2',
+            desc: 'Mostra manual de uso do sistema'
         });
         
         // constroi schema no modal
@@ -261,7 +199,7 @@
         
         async function handleProcess() {
             const fileInput = document.getElementById('fileInput');
-            if (!fileInput.files[0]) return alert("Selecione um arquivo!");
+            if (!fileInput.files[0]) return appAlert("warning", '<i class="bi bi-exclamation-triangle-fill me-1"></i> Selecione um arquivo', false);
             
             const format = document.getElementById('formatSelect').value;
             const reader = new FileReader();
