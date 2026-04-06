@@ -3,13 +3,14 @@
  *
  * Fluxo:
  *   1. Lê configurações globais da planilha (células conforme settings.cells)
- *   2. Para cada carro no intervalo de viagens (duas colunas por carro):
+ *   2. Resolve o layout de colunas da grade (settings.layoutColunas, célula F11)
+ *   3. Para cada carro no intervalo de viagens (N colunas por carro, conforme layout):
  *      a. Lê local de pegada personalizado (linha 3 da grade)
- *      b. Lê trocas de turno (linhas 29-31)
- *      c. Percorre células em zigzag montando viagens com início e fim
+ *      b. Lê trocas de turno (linhas configuradas)
+ *      c. Percorre células montando viagens com início e fim conforme o layout
  *      d. Divide viagens em tabelas (por TT e por intervalo/recolhe)
  *      e. Nomeia tabelas, aplica exceções de tabela e de viagem, preparo, INIC_GAR
- *   3. Retorna array de { trip, global } prontos para o Exporter
+ *   4. Retorna array de { trip, global } prontos para o Exporter
  */
 
 const Engine = {
@@ -102,12 +103,18 @@ const Engine = {
 
     /**
      * Lê células de configuração do excel e retorna globalCtx.
+     * Inclui a resolução do layout de colunas a ser usado pelo engine.
      */
     readGlobalConfig(matrix) {
         const c = SETTINGS.cells;
 
         const rawCircular = c.ehCircular ? this.getCell(matrix, c.ehCircular) : null;
         const ehCircular  = rawCircular === "true" || rawCircular === 1 || rawCircular === '1';
+
+        // Resolve layout de colunas: lê F11, busca em settings.layoutColunas, cai no '1' se ausente
+        const rawLayout    = c.layoutColunas ? this.getCell(matrix, c.layoutColunas) : null;
+        const layoutKey    = (rawLayout != null && rawLayout !== '') ? String(rawLayout).trim() : '1';
+        const layoutConf   = SETTINGS.layoutColunas?.[layoutKey] ?? SETTINGS.layoutColunas?.['1'];
 
         return {
             codProg:        this.getCell(matrix, c.codProg),
@@ -120,6 +127,7 @@ const Engine = {
             firstSeq:       SETTINGS.primeiroCodViagem,
             codLocalPegada: String(this.getCell(matrix, c.codLocalPegada) ?? ''),
             ehCircular,
+            layoutConf,     // { totalColunas, slots } — usado por process e buildTrips
         };
     },
 
@@ -253,8 +261,11 @@ const Engine = {
      *
      * Em modo circular o sentido registrado é sempre 'C' (todas as viagens
      * circulares usam dir='C', então o validTripsSet também usa 'C').
+     *
+     * @param {object} cols - índices absolutos resolvidos pelo layout
+     *                        { ida_inicio, volta_inicio, ... }
      */
-    readTrocasTurno(matrix, colIda, colVolta, validTripsSet, ehCircular) {
+    readTrocasTurno(matrix, cols, validTripsSet, ehCircular) {
         const linhas = SETTINGS.viagensConf.linhasTrocaTurno;
         const result = [];
 
@@ -262,8 +273,8 @@ const Engine = {
             if (i > 0 && result.length < i) break;
 
             const rowIdx   = linhas[i] - 1;
-            const minIda   = this.toMin(matrix[rowIdx]?.[colIda]);
-            const minVolta = this.toMin(matrix[rowIdx]?.[colVolta]);
+            const minIda   = this.toMin(matrix[rowIdx]?.[cols.ida_inicio]);
+            const minVolta = this.toMin(matrix[rowIdx]?.[cols.volta_inicio]);
 
             let min = null, sentido = null;
 
@@ -287,61 +298,76 @@ const Engine = {
     },
 
     // =========================================================================
-    // ZIGZAG — MONTAGEM DE VIAGENS BRUTAS
+    // MONTAGEM DE VIAGENS BRUTAS — orientada pelo layout de colunas
     // =========================================================================
 
     /**
-     * Percorre colunas de um carro e retorna viagens brutas.
+     * Percorre as linhas do bloco de um carro e retorna viagens brutas.
      *
-     * Modo normal (zigzag IDA/VOLTA):
-     *   Viagem IDA:   start=colIda[r],   end=colVolta[r]
-     *   Viagem VOLTA: start=colVolta[r], end=colIda[r+1]
-     *   Texto em qualquer célula é ignorado (toMin retorna null).
+     * A lógica de leitura é orientada pelo objeto `cols`, que mapeia cada papel
+     * ao índice absoluto da coluna correspondente na matriz. Os papéis possíveis
+     * são: ida_inicio, ida_fim (opt), volta_inicio, volta_fim (opt).
      *
-     * Modo circular:
-     *   Viagem normal C:   colIda[r] tem hora, colVolta[r] vazio ou texto
-     *                      dir='C', start=colIda[r], end=colIda[r+1]
-     *   Meia viagem IDA:   colIda[r] tem hora E colVolta[r] tem hora
-     *                      dir = circularMeiaViagemConsisteSentido ? 'I' : 'C'
-     *                      start=colIda[r], end=colVolta[r]
-     *   Meia viagem VOLTA: colIda[r] vazio/texto, colVolta[r] tem hora
-     *                      dir = circularMeiaViagemConsisteSentido ? 'V' : 'C'
-     *                      start=colVolta[r], end=colIda[r+1]
-     *                      Só gerada se circularGeraMeiaViagem=true E
-     *                      for a primeira viagem ou primeira após intervalo.
+     * Regras de resolução de fim de viagem:
+     *   IDA   — fim = ida_fim[r]        se definido no layout e preenchido
+     *                 volta_inicio[r]   caso contrário (comportamento padrão)
+     *   VOLTA — fim = volta_fim[r]      se definido no layout e preenchido
+     *                 ida_inicio[r+1]   caso contrário (comportamento padrão)
      *
-     * Retorna { dir, start, end|null, hasEnd, row }[]
+     * hasEnd=false sinaliza intervalo/fim de serviço (célula de fim vazia).
+     *
+     * Modo circular segue as mesmas regras de fonte de dados, alterando apenas
+     * a atribuição de dir ('C', 'I' ou 'V' conforme circularMeiaViagemConsisteSentido).
+     *
+     * @param {object[][]} matrix   - planilha como matriz 2D
+     * @param {object}     cols     - { ida_inicio, ida_fim?, volta_inicio, volta_fim? }
+     *                               índices absolutos (0-based) de cada papel
+     * @param {number}     rowStart - primeira linha da grade (0-based)
+     * @param {number}     rowEnd   - última linha da grade (0-based)
+     * @param {boolean}    ehCircular
+     * @returns {{ dir, start, end, hasEnd, row, suppressed? }[]}
      */
-    buildTrips(matrix, colIda, colVolta, rowStart, rowEnd, ehCircular) {
+    buildTrips(matrix, cols, rowStart, rowEnd, ehCircular) {
         const trips = [];
 
-        if (!ehCircular) {
-            // ── Modo normal: zigzag IDA/VOLTA ──
-            for (let r = rowStart; r <= rowEnd; r++) {
-                const vIda   = this.toMin(matrix[r]?.[colIda]);
-                const vVolta = this.toMin(matrix[r]?.[colVolta]);
+        // Helpers de leitura por papel — retornam null se o papel não existe no layout
+        const vIdaInicio   = (r) => this.toMin(matrix[r]?.[cols.ida_inicio]);
+        const vIdaFim      = (r) => cols.ida_fim      != null ? this.toMin(matrix[r]?.[cols.ida_fim])      : null;
+        const vVoltaInicio = (r) => this.toMin(matrix[r]?.[cols.volta_inicio]);
+        const vVoltaFim    = (r) => cols.volta_fim    != null ? this.toMin(matrix[r]?.[cols.volta_fim])    : null;
 
-                if (vIda !== null) {
+        if (!ehCircular) {
+            // ── Modo normal ──────────────────────────────────────────────────
+            for (let r = rowStart; r <= rowEnd; r++) {
+                const idaStart = vIdaInicio(r);
+                const idaEnd   = vIdaFim(r) ?? vVoltaInicio(r);       // fim explícito ou início da volta
+
+                if (idaStart !== null) {
                     trips.push({
-                        dir: 'I', start: vIda,
-                        end: vVolta,
-                        hasEnd: vVolta !== null,
-                        row: r,
+                        dir:    'I',
+                        start:  idaStart,
+                        end:    idaEnd,
+                        hasEnd: idaEnd !== null,
+                        row:    r,
                     });
                 }
 
-                if (vVolta !== null) {
-                    const nextIda = (r < rowEnd) ? this.toMin(matrix[r + 1]?.[colIda]) : null;
+                const voltaStart = vVoltaInicio(r);
+                const voltaEnd   = vVoltaFim(r) ?? ((r < rowEnd) ? vIdaInicio(r + 1) : null); // fim explícito ou próxima ida
+
+                if (voltaStart !== null) {
                     trips.push({
-                        dir: 'V', start: vVolta,
-                        end: nextIda,
-                        hasEnd: nextIda !== null,
-                        row: r,
+                        dir:    'V',
+                        start:  voltaStart,
+                        end:    voltaEnd,
+                        hasEnd: voltaEnd !== null,
+                        row:    r,
                     });
                 }
             }
+
         } else {
-            // ── Modo circular ──
+            // ── Modo circular ────────────────────────────────────────────────
             const geraMeiaViagem  = SETTINGS.circularGeraMeiaViagem           ?? true;
             const consisteSentido = SETTINGS.circularMeiaViagemConsisteSentido ?? false;
             const codMeiaIda      = consisteSentido ? 'I' : 'C';
@@ -350,44 +376,45 @@ const Engine = {
             let meiaVoltaPermitida = true;
 
             for (let r = rowStart; r <= rowEnd; r++) {
-                const rawVolta  = matrix[r]?.[colVolta];
-                const vIda      = this.toMin(matrix[r]?.[colIda]);
-                const vVolta    = this.toMin(rawVolta);
-                // Célula volta com conteúdo não-hora (texto como RECO) — deve ser ignorada AQUIIIIIIIIIIIIIII
-                // const voltaTemTexto = rawVolta != null && rawVolta !== '' && vVolta === null;
+                const idaStart   = vIdaInicio(r);
+                const voltaStart = vVoltaInicio(r);
 
-                if (vIda !== null && vVolta !== null) {
+                if (idaStart !== null && voltaStart !== null) {
                     // ── Meia viagem IDA: término prematuro com hora válida na volta ──
-                    const nextIda = (r < rowEnd) ? this.toMin(matrix[r + 1]?.[colIda]) : null;
+                    const idaEnd   = vIdaFim(r) ?? voltaStart;
+                    const nextIda  = (r < rowEnd) ? vIdaInicio(r + 1) : null;
                     trips.push({
-                        dir: codMeiaIda, start: vIda,
-                        end: vVolta,
+                        dir:    codMeiaIda,
+                        start:  idaStart,
+                        end:    idaEnd,
                         hasEnd: nextIda !== null,
-                        row: r,
+                        row:    r,
                     });
-                    meiaVoltaPermitida = nextIda === null; // ← permite meia VOLTA se for intervalo
+                    meiaVoltaPermitida = nextIda === null; // permite meia VOLTA se for intervalo
 
-                } else if (vIda !== null) {
+                } else if (idaStart !== null) {
                     // ── Viagem circular normal (volta vazia ou com texto ignorado) ──
-                    const nextIda = (r < rowEnd) ? this.toMin(matrix[r + 1]?.[colIda]) : null;
+                    const nextIda = (r < rowEnd) ? vIdaInicio(r + 1) : null;
                     trips.push({
-                        dir: 'C', start: vIda,
-                        end: nextIda,
+                        dir:    'C',
+                        start:  idaStart,
+                        end:    nextIda,
                         hasEnd: nextIda !== null,
-                        row: r,
+                        row:    r,
                     });
                     meiaVoltaPermitida = false;
 
-                } else if (vVolta !== null) {
+                } else if (voltaStart !== null) {
                     // ── Meia viagem VOLTA: início anormal ──
                     if (meiaVoltaPermitida) {
-                        const nextIda = (r < rowEnd) ? this.toMin(matrix[r + 1]?.[colIda]) : null;
+                        const voltaEnd = vVoltaFim(r) ?? ((r < rowEnd) ? vIdaInicio(r + 1) : null);
                         trips.push({
-                            dir: codMeiaVolta, start: vVolta,
-                            end: nextIda,
-                            hasEnd: nextIda !== null,
+                            dir:        codMeiaVolta,
+                            start:      voltaStart,
+                            end:        voltaEnd,
+                            hasEnd:     voltaEnd !== null,
                             suppressed: !geraMeiaViagem,
-                            row: r,
+                            row:        r,
                         });
                     }
                     meiaVoltaPermitida = false;
@@ -581,16 +608,6 @@ const Engine = {
         });
 
         /**
-         * Sentido oposto para encerramentos (intervalo/recolhe).
-         * 'C' e demais códigos circulares não invertem.
-         */
-        const dirOposto = (dir) => {
-            if (dir === 'I') return 'V';
-            if (dir === 'V') return 'I';
-            return dir;
-        };
-
-        /**
          * Resolve o local de encerramento para uma atividade.
          * Prioridade: exceção de viagem → settings.atividades[chave].local → codLocal por sentido
          */
@@ -630,7 +647,6 @@ const Engine = {
             
             // ── Linha de encerramento ──
             if (isLast) {
-                const dirEnc = dirOposto(t.dir);
 
                 // ── Troca de turno ──
                 if (ttEnd && SETTINGS.geraEntradaTrocaTurno) {
@@ -641,17 +657,17 @@ const Engine = {
 
                 // ── Intervalo ──
                 } else if (isIntervalo && SETTINGS.geraEntradaIntervalo) {
-                    const excInt = this.applyExcecoesViagens(excViagensRules, carroID, t.start, dirEnc, 'O');
+                    const excInt = this.applyExcecoesViagens(excViagensRules, carroID, t.start, t.dir, 'O');
                     const atInt  = excInt.atividade ?? SETTINGS.atividades.intervalo.cod;
-                    const lcInt  = localEncerramento(excInt, 'intervalo', dirEnc);
-                    rows.push({ trip: makeTripCtx(dirEnc, t.start, t.start, String(seq), atInt, lcInt, excInt), global: globalCtx });
+                    const lcInt  = localEncerramento(excInt, 'intervalo', t.dir);
+                    rows.push({ trip: makeTripCtx(t.dir, t.start, t.start, String(seq), atInt, lcInt, excInt), global: globalCtx });
 
                 // ── Recolhe ──
                 } else if (isLastTable && SETTINGS.geraEntradaRecolhidas) {
                     const endMin = (t.end ?? t.start) + recoMins;
                     const atReco = recoExc.atividade ?? SETTINGS.atividades.recolhe.cod;
-                    const lcReco = localEncerramento(recoExc, 'recolhe', dirEnc);
-                    rows.push({ trip: makeTripCtx(dirEnc, t.end ?? t.start, endMin, String(seq), atReco, lcReco, recoExc), global: globalCtx });
+                    const lcReco = localEncerramento(recoExc, 'recolhe', t.dir);
+                    rows.push({ trip: makeTripCtx(t.dir, t.end ?? t.start, endMin, String(seq), atReco, lcReco, recoExc), global: globalCtx });
                 }
             }
         }
@@ -677,14 +693,25 @@ const Engine = {
         const vConf              = SETTINGS.viagensConf;
         const { start: vS, end: vE } = this.parseRange(vConf.intervaloGeral);
 
+        // Layout de colunas resolvido uma vez para todos os carros
+        const layoutConf     = globalCtx.layoutConf;
+        const totalColunas   = layoutConf.totalColunas;
+        const slots          = layoutConf.slots;
+
         const allRows = [];
 
-        for (let c = vS.col; c <= vE.col; c += 2) {
-            const colIda   = c;
-            const colVolta = c + 1;
+        for (let c = vS.col; c <= vE.col; c += totalColunas) {
 
-            // Identificar carro
-            const rawID = matrix[vConf.linhaCarroID - 1]?.[colIda];
+            // Resolve índices absolutos de cada papel para este bloco de carro
+            const cols = {
+                ida_inicio:   c + slots.ida_inicio,
+                ida_fim:      slots.ida_fim      != null ? c + slots.ida_fim      : null,
+                volta_inicio: c + slots.volta_inicio,
+                volta_fim:    slots.volta_fim    != null ? c + slots.volta_fim    : null,
+            };
+
+            // Identificar carro — sempre pela coluna ida_inicio do bloco
+            const rawID = matrix[vConf.linhaCarroID - 1]?.[cols.ida_inicio];
             if (rawID == null || rawID === '' || rawID === 0) continue;
             const rawStr = String(rawID);
             if (rawStr.startsWith('=')) continue;
@@ -693,15 +720,15 @@ const Engine = {
 
             // Local de pegada personalizado (linha 3) ou padrão global
             const lr = vConf.linhaLocalidade - 1;
-            const codLocalIda   = String(matrix[lr]?.[colIda]   || '') || globalCtx.codIda;
-            const codLocalVolta = String(matrix[lr]?.[colVolta] || '') || globalCtx.codVolta;
+            const codLocalIda   = String(matrix[lr]?.[cols.ida_inicio]   || '') || globalCtx.codIda;
+            const codLocalVolta = String(matrix[lr]?.[cols.volta_inicio] || '') || globalCtx.codVolta;
 
-            // Montar viagens (modo normal ou circular)
-            const trips = this.buildTrips(matrix, colIda, colVolta, vS.row, vE.row, globalCtx.ehCircular);
+            // Montar viagens conforme o layout
+            const trips = this.buildTrips(matrix, cols, vS.row, vE.row, globalCtx.ehCircular);
             if (trips.length === 0) continue;
 
             const validTripsSet = new Set(trips.map(t => `${t.start}_${t.dir}`));
-            const trocas        = this.readTrocasTurno(matrix, colIda, colVolta, validTripsSet, globalCtx.ehCircular);
+            const trocas        = this.readTrocasTurno(matrix, cols, validTripsSet, globalCtx.ehCircular);
             const tables        = this.splitIntoTables(trips, trocas);
 
             const usedLetters = [];

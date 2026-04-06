@@ -40,7 +40,7 @@ const SETTINGS = {
     geraEntradaIntervalo: true,
 
     // Gera linha de recolhe ao final da última tabela do carro
-    geraEntradaRecolhidas: false,
+    geraEntradaRecolhidas: true,
 
     // Aplica formatação de campo (padding/alinhamento) também no CSV
     aplicarFormatacaoNoCsv: true,
@@ -91,6 +91,74 @@ const SETTINGS = {
         tempoRecolhe:    'F8',
         codLocalPegada:  'F9',
         ehCircular:      'F10',  // true ou 1 = linha circular; vazio ou 0 = normal
+        layoutColunas:   'F11',  // código do layout de colunas da grade de viagens (padrão: '1')
+    },
+
+    // ── Layouts de colunas da grade de viagens ────────────────────────────────
+    //
+    // Cada layout define quantas colunas ocupa um carro (totalColunas) e quais
+    // papéis cada coluna relativa (0-based dentro do bloco) desempenha.
+    //
+    // Papéis disponíveis:
+    //   ida_inicio   — obrigatório — horário de saída da viagem de ida
+    //   ida_fim      — opcional   — fim explícito da ida;
+    //                               se ausente, usa volta_inicio da mesma linha
+    //   volta_inicio — obrigatório — horário de saída da viagem de volta
+    //   volta_fim    — opcional   — fim explícito da volta;
+    //                               se ausente, usa ida_inicio da linha seguinte
+    //
+    // Colunas sem papel definido são simplesmente ignoradas pelo engine.
+    // O código lido de F11 deve corresponder a uma chave deste mapa;
+    // se ausente ou não encontrado, o engine usa o layout '1'.
+    //
+    layoutColunas: {
+
+        // Layout 1 — padrão atual: 2 colunas IDA / VOLTA
+        // IDA:   start = ida_inicio[r],   end = volta_inicio[r]   (ida_fim ausente)
+        // VOLTA: start = volta_inicio[r], end = ida_inicio[r+1]   (volta_fim ausente)
+        '1': {
+            totalColunas: 2,
+            slots: {
+                ida_inicio:   0,
+                volta_inicio: 1,
+            },
+        },
+
+        // Layout 2 — 3 colunas IDA / VOLTA / FIM_VOLTA
+        // IDA:   start = ida_inicio[r],   end = volta_inicio[r]   (ida_fim ausente)
+        // VOLTA: start = volta_inicio[r], end = volta_fim[r]      (explícito)
+        '2': {
+            totalColunas: 3,
+            slots: {
+                ida_inicio:   0,
+                volta_inicio: 1,
+                volta_fim:    2,
+            },
+        },
+
+        // Layout 3 — 4 colunas onde apenas colunas 0 e 2 importam (1 e 3 ignoradas)
+        // IDA:   start = ida_inicio[r],   end = volta_inicio[r]   (ida_fim ausente)
+        // VOLTA: start = volta_inicio[r], end = ida_inicio[r+1]   (volta_fim ausente)
+        '3': {
+            totalColunas: 4,
+            slots: {
+                ida_inicio:   0,
+                volta_inicio: 2,
+            },
+        },
+
+        // Layout 4 — 4 colunas com fim explícito para ambos os sentidos
+        // IDA:   start = ida_inicio[r],   end = ida_fim[r]        (explícito)
+        // VOLTA: start = volta_inicio[r], end = volta_fim[r]      (explícito)
+        '4': {
+            totalColunas: 4,
+            slots: {
+                ida_inicio:   0,
+                ida_fim:      1,
+                volta_inicio: 2,
+                volta_fim:    3,
+            },
+        },
     },
 
     // ── Configuração da grade de viagens ──────────────────────────────────────
