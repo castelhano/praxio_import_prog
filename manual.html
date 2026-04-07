@@ -43,6 +43,78 @@
     display: flex;
     min-height: 100vh;
   }
+  body:has(dialog[open]) {
+    overflow: hidden;
+  }
+
+  /* Estilização Independente para o Modal do Keywatch */
+dialog#keywatch-modal {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg2);
+    color: var(--text);
+    padding: 24px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    /* Corrigindo o reset global: */
+    margin: auto !important; 
+}
+
+dialog#keywatch-modal::backdrop {
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+}
+
+#keywatch-modal .context-label {
+    position: absolute;
+    top: 38px!important;      /* Alinhado com o padding superior + um pequeno ajuste */
+    right: 38px!important;    /* Alinhado com o padding lateral + folga para a borda do input */
+    font-size: 10px!important;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    pointer-events: none; /* Evita que o clique no label atrapalhe o foco no input */
+}
+
+#keywatch-modal .kw-search {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 12px;
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+#keywatch-modal .kw-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+#keywatch-modal .kw-table th {
+    text-align: left;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    padding: 8px;
+}
+
+#keywatch-modal .kw-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+#keywatch-modal .kw-key {
+    background: var(--bg3);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    border: 1px solid var(--border);
+    margin-right: 4px;
+}
 
   /* ── SIDEBAR ─────────────────────────────────────── */
   #sidebar {
@@ -440,6 +512,21 @@
     font-size: 12px;
     font-family: 'DM Mono', monospace;
     width: 100%;
+    table-layout: auto;
+  }
+  
+  .grid-table td.row-num, 
+  .grid-table th:nth-child(1),
+  .grid-table th:nth-child(2),
+  .grid-table td:nth-child(2) {
+    width: 1%;
+    white-space: nowrap; /* Garante que o texto não quebre linha */
+  }
+  
+  /* 3. As demais colunas (da 3ª em diante) vão se distribuir */
+  .grid-table th:nth-child(n+3),
+  .grid-table td:nth-child(n+3) {
+    width: auto; 
   }
 
   .grid-table th, .grid-table td {
@@ -683,10 +770,9 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
-    margin: 16px 0;
+    margin: 0;
     border-radius: var(--radius);
     overflow: hidden;
-    border: 1px solid var(--border);
   }
 
   .exc-table th {
@@ -1096,74 +1182,103 @@
             <td class="value-example">Linha 3 do Excel</td>
             <td class="value-text">Código de localidade usado para alterar todas as viagens de um sentido do carro.</td>
           </tr>
-          <tr>
-            <td>Linhas 4 em diante</td>
-            <td class="value-example">Linhas 4–33</td>
-            <td class="value-text">Horários das viagens, uma por linha, no formato <strong>HH:MM</strong>.</td>
-          </tr>
         </tbody>
       </table>
     </div>
 
+    <div class="callout info" style="flex-wrap: wrap;">
+      <div style="width: 100%;"><span class="callout-icon">ℹ️</span> <strong>Layout das viagens:</strong> O Engine permite utilização de multiplos layouts para entrada de dados. Por padrão são criado os layouts:</div>
+      <ol>
+        <li><strong>2 colunas (Ida / Volta):</strong> Layout base, cada carro ocupa duas colunas no grid sendo a primeira as viagens de <strong>IDA</strong> e a segunda as viagens de <strong>VOLTA</strong></li>
+        <li><strong>3 colunas (Ida / Volta / Fim volta):</strong> Neste layout são apresentado 3 linhas por carro, o que varia do layout 1 é a adição da terceira coluna com horário de fim das viagens de volta, deve ser informado manualmente.</li>
+        <li><strong>4 colunas (Ida / ref / Volta / ref):</strong> Layout com uma coluna de referência entre as viagens de IDA e VOLTA, estas colunas são ignoradas no Engine, mantendo o comportamento que o fim da viagem de IDA eé o inicio do VOLTA, e vice versa.</li>
+      </ol>      
+    </div>
+
     <h3>Exemplo de Grade — Layout 1 (2 colunas por carro)</h3>
-    <p>Cada carro ocupa <strong>2 colunas</strong>: Ida e Volta. Palavras como <code>INTERV</code> ou <code>reco</code> na coluna indicam fim de turno/serviço.</p>
+    <p>Cada carro ocupa <strong>2 colunas</strong>: Ida e Volta, onde o fim da viagem de IDA é o inicio do VOLTA, mesma regra se aplica para o fim da viagem de volta.</p>
 
     <div class="excel-wrap">
       <table class="grid-table">
         <thead>
           <tr>
-            <th></th>
-            <th colspan="2" class="car-header">Carro 01</th>
-            <th colspan="2" class="car-header">Carro 02</th>
-            <th colspan="2" class="car-header">Carro 03</th>
+            <tr><td class="row-num">1</td>
+            <td style="text-align: right;">seq:</td>
+            <th class="car-header">1</th>
+            <th class="car-header">1</th>
+            <th class="car-header">2</th>
+            <th class="car-header">2</th>
+            <th class="car-header">3</th>
+            <th class="car-header">3</th>
           </tr>
           <tr>
-            <th></th>
-            <th>Ida</th><th>Volta</th>
-            <th>Ida</th><th>Volta</th>
-            <th>Ida</th><th>Volta</th>
+            <tr><td class="row-num">2</td>
+            <td style="text-align: right;">sentido:</td>
+            <th>I</th><th>V</th>
+            <th>I</th><th>V</th>
+            <th>I</th><th>V</th>
+          </tr>
+          <tr>
+            <tr><td class="row-num">3</td>
+            <td style="text-align: right;">local:</td>
+            <th></th><th></th>
+            <th>12</th><th></th>
+            <th></th><th></th>
           </tr>
         </thead>
         <tbody>
-          <tr><td class="row-num">Seq</td><td colspan="2">01</td><td colspan="2">02</td><td colspan="2">03</td></tr>
-          <tr><td class="row-num">Sentido</td><td>I</td><td>V</td><td>I</td><td>V</td><td>I</td><td>V</td></tr>
-          <tr><td class="row-num">Local</td><td class="empty">—</td><td class="empty">—</td><td class="empty">—</td><td class="empty">—</td><td class="empty">—</td><td class="empty">—</td></tr>
-          <tr><td class="row-num">4</td>
+          <tr>
+            <td class="row-num">4</td>
+            <td style="text-align: right;">1</td>
             <td class="ida">05:00</td><td class="volta">05:21</td>
             <td class="ida">05:20</td><td class="volta">05:45</td>
             <td class="ida">05:40</td><td class="volta">06:16</td>
           </tr>
-          <tr><td class="row-num">5</td>
+          <tr>
+            <td class="row-num">5</td>
+            <td style="text-align: right;">2</td>
             <td class="ida">06:20</td><td class="volta">06:56</td>
             <td class="ida">06:50</td><td class="volta">07:26</td>
             <td class="ida">07:10</td><td class="volta">07:46</td>
           </tr>
-          <tr><td class="row-num">6</td>
+          <tr>
+            <td class="row-num">6</td>
+            <td style="text-align: right;">3</td>
             <td class="ida">07:50</td><td class="volta">08:26</td>
             <td class="ida">08:20</td><td class="volta">08:56</td>
             <td class="ida">08:40</td><td class="volta">09:26</td>
           </tr>
-          <tr><td class="row-num">9</td>
+          <tr>
+            <td class="row-num">9</td>
+            <td style="text-align: right;">4</td>
             <td class="ida">12:23</td><td class="volta">12:59</td>
             <td class="ida">11:50</td><td class="volta">12:26</td>
             <td class="ida">13:15</td><td class="volta">13:51</td>
           </tr>
-          <tr class="special-row"><td class="row-num">10</td>
+          <tr class="special-row">
+            <td class="row-num">10</td>
+            <td style="text-align: right;">5</td>
             <td class="ida">13:49</td><td class="interv">INTERV</td>
             <td class="ida">13:10</td><td class="interv">INTERV</td>
             <td class="empty">—</td><td class="empty">—</td>
           </tr>
-          <tr><td class="row-num">12</td>
+          <tr>
+            <td class="row-num">12</td>
+            <td style="text-align: right;">6</td>
             <td class="ida">15:35</td><td class="volta">16:17</td>
             <td class="ida">15:00</td><td class="volta">15:36</td>
             <td class="ida">14:45</td><td class="volta">15:21</td>
           </tr>
-          <tr><td class="row-num">17</td>
+          <tr>
+            <td class="row-num">17</td>
+            <td style="text-align: right;">7</td>
             <td class="ida">23:10</td><td class="volta">23:50</td>
             <td class="ida">22:40</td><td class="volta">23:20</td>
             <td class="ida">23:30</td><td class="volta">00:06</td>
           </tr>
-          <tr class="special-row"><td class="row-num">18</td>
+          <tr class="special-row">
+            <td class="row-num">18</td>
+            <td style="text-align: right;">8</td>
             <td class="empty">—</td><td class="reco">reco</td>
             <td class="empty">—</td><td class="reco">reco</td>
             <td class="empty">—</td><td class="reco">reco</td>
@@ -1174,56 +1289,59 @@
 
     <div class="callout warning">
       <span class="callout-icon">⚠️</span>
-      <div><strong>Textos especiais na grade:</strong> palavras como <code>INTERV</code>, <code>reco</code>, <code>TT</code> ou qualquer texto que não seja um horário válido são <strong>ignorados pelo engine</strong> como valor de horário. Eles servem apenas como anotação visual para o usuário. O que realmente sinaliza um intervalo ou recolhe é a <em>ausência de um horário válido</em> na célula de fim de viagem.</div>
+      <div><strong>Textos especiais na grade:</strong> palavras como <code>INTERV</code>, <code>RECO</code>, <code>TT</code> ou qualquer texto que não seja um horário válido são <strong>ignorados pelo engine</strong>. Eles servem apenas como anotação visual para o usuário. O que realmente sinaliza um intervalo ou recolhe é a <em>ausência de um horário válido</em> na célula de fim de viagem.</div>
     </div>
 
-    <h3>Como o engine calcula o fim de cada viagem</h3>
-    <p>No Layout 1 (padrão, 2 colunas), as regras são:</p>
-    <div class="callout info">
-      <span class="callout-icon">🔄</span>
-      <div>
-        <strong>IDA:</strong> começa em <code>ida[linha N]</code>, termina em <code>volta[linha N]</code>.<br><br>
-        <strong>VOLTA:</strong> começa em <code>volta[linha N]</code>, termina em <code>ida[linha N+1]</code>.<br><br>
-        Se o <em>fim</em> calculado for vazio (texto ou célula em branco), a viagem recebe <code>hasEnd=false</code>, sinalizando intervalo ou fim de serviço.
-      </div>
-    </div>
+    <h3 style="margin-top: 40px;">Como o engine calcula o fim de cada viagem</h3>
+    <ul style="color: var(--text-muted);">
+      <li><strong>Via de regra</strong>, e isso se aplica a todos os layouts, a lógica é que uma viagem de IDA é considerada <strong>Produtiva</strong> se existe uma horário válido de fim na coluna imediatamente a frente dela.</li>
+      <li>Para o volta o engine busca se existe uma viagem de fim válida na linha abaixo na coluna anterior, ou seja se existe um lançamento na coluna de IDA.</li>
+      <li>Em ambos os casos, se não é identificado fim para viagem, o engine trata o lançamento como <strong>Intervalo</strong> ou <strong>Recolhida</strong>, se existe viagens posteriores considera Intervalo, se não trata como Recolhida.</li>
+      <li>É possivel configurar no arquivo <code>settings.js</code> se será gerado uma entrada para estes casos de intervalo e recolhe, e como deve ser o comportamento deles (detalhado melhor na seção técnica, subitem de comportamento)</li>
+    </ul>    
   </section>
 
   <!-- TROCAS DE TURNO -->
   <section class="section" id="trocas-turno">
     <h2>Trocas de Turno (TT)</h2>
-    <p>As linhas de <strong>Troca de Turno</strong> ficam abaixo da grade principal, nas linhas configuradas em <code>settings.viagensConf.linhasTrocaTurno</code> (padrão: linhas <strong>34, 35, 36</strong>).</p>
-
-    <p>Cada linha de TT representa um corte de tabela: ao atingir a viagem de TT, o engine fecha a tabela atual e abre uma nova. O carro pode ter até 3 cortes de TT.</p>
+    <p>As linhas de <strong>troca de turno</strong> ficam em geral ao final da grade de horários, por padrão é disponibilizado campo para <strong>3 trocas de turno por carro</strong>, ou sejá até 4 condutores por veículo.</p>
+    <p>Cada troca de turno deve ser colocada no seu respectivo sentido e deve corresponder a uma viagem válida do grid, se informado troca de turno <code>14:30</code> na coluna referente a <code>ida</code>, o engine ira encerrar a tabela se conseguir localizar essa viagem no sentido informado, se não ignora entrada.</p>
 
     <div class="excel-wrap">
       <table class="grid-table">
         <thead>
           <tr>
-            <th></th>
-            <th colspan="2" class="car-header">Carro 01</th>
-            <th colspan="2" class="car-header">Carro 02</th>
-            <th colspan="2" class="car-header">Carro 03</th>
+            <th class="row-num">1</th>
+            <td style="text-align: right;">seq:</td>
+            <th class="car-header">1</th><th class="car-header">1</th>
+            <th class="car-header">2</th><th class="car-header">2</th>
+            <th class="car-header">3</th><th class="car-header">3</th>
           </tr>
           <tr>
-            <th></th>
-            <th>Ida</th><th>Volta</th>
-            <th>Ida</th><th>Volta</th>
-            <th>Ida</th><th>Volta</th>
-          </tr>
+            <th class="row-num">2</th>
+            <td style="text-align: right;">sentido:</td>
+            <th>I</th><th>V</th>
+            <th>I</th><th>V</th>
+            <th>I</th><th>V</th>
+          </tr> 
         </thead>
         <tbody>
-          <tr class="tt-row"><td class="row-num">34</td>
+          <tr><td colspan="8">...</td></tr>
+          <tr class="tt-row">
+            <td class="row-num">34</td>
+            <td style="text-align: right;">TT 1o:</td>
             <td class="tt">12:10</td><td class="empty">—</td>
             <td class="empty">—</td><td class="tt">16:00</td>
             <td class="tt">13:15</td><td class="empty">—</td>
           </tr>
           <tr class="tt-row"><td class="row-num">35</td>
+            <td style="text-align: right;">TT 2o:</td>
             <td class="empty">—</td><td class="tt">16:00</td>
             <td class="empty">—</td><td class="empty">—</td>
             <td class="empty">—</td><td class="empty">—</td>
           </tr>
           <tr class="tt-row"><td class="row-num">36</td>
+            <td style="text-align: right;">TT 3o:</td>
             <td class="empty">—</td><td class="empty">—</td>
             <td class="empty">—</td><td class="empty">—</td>
             <td class="empty">—</td><td class="empty">—</td>
@@ -1244,7 +1362,7 @@
   <!-- EXCEÇÕES DE VIAGEM -->
   <section class="section" id="excecoes-viagens">
     <h2>Exceções de Viagem</h2>
-    <p>Permitem sobrescrever a atividade, o local ou a linha de <strong>viagens específicas</strong>. Ficam no intervalo <strong>A40:G60</strong> (configurável).</p>
+    <p>Permitem sobrescrever a atividade, o local ou a linha (caso viagem pertença a outra linha) de <strong>viagens específicas</strong>, ou várias (<strong>alteração em lote</strong>). Ficam no intervalo <strong>A40:G60</strong> (configurável).</p>
 
     <div class="excel-wrap">
       <table class="exc-table">
@@ -1964,7 +2082,15 @@
 
 <script>
 
-  const appKeyMap = new Keywatch({});
+  const appKeyMap = new Keywatch({
+    shortcutModalClasslist: '', // Limpamos as classes do BS
+    searchInputClasslist: 'kw-search',
+    modalTableClasslist: 'kw-table',
+    modalTableLabelClasslist: 'kw-key',
+    contextLabelClasslist: 'context-label', 
+    shortcutMaplist: "alt+k"
+  });
+  appKeyMap.shortcutModal.id = 'keywatch-modal';
   appKeyMap.bind('alt+v', ()=>{
       document.getElementById('home_id').click()
   }, {
