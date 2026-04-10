@@ -912,8 +912,8 @@ dialog#keywatch-modal::backdrop {
   /* ── FOOTER ──────────────────────────────────────── */
   .footer {
     padding: 40px 64px;
-    color: var(--text-dim);
-    font-size: 12.5px;
+    color: var(--text-muted);
+    font-size: 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1350,19 +1350,12 @@ dialog#keywatch-modal::backdrop {
       </table>
     </div>
 
-    <div class="callout tip">
-      <span class="callout-icon">💡</span>
-      <div>
-        O horário de TT deve corresponder <strong>exatamente</strong> a um horário existente na grade de viagens daquele carro. Se não houver correspondência, o TT é ignorado.<br><br>
-        O sentido do TT é determinado pela coluna onde o horário foi inserido (Ida → sentido I, Volta → sentido V).
-      </div>
-    </div>
   </section>
 
   <!-- EXCEÇÕES DE VIAGEM -->
   <section class="section" id="excecoes-viagens">
     <h2>Exceções de Viagem</h2>
-    <p>Permitem sobrescrever a atividade, o local ou a linha (caso viagem pertença a outra linha) de <strong>viagens específicas</strong>, ou várias (<strong>alteração em lote</strong>). Ficam no intervalo <strong>A40:G60</strong> (configurável).</p>
+    <p>Sistema permite sobrescrever a atividade, o local ou a linha (caso viagem pertença a outra linha) de <strong>viagens específicas</strong>, ou várias (<strong>alteração em lote</strong>). Estes ajustes de viagem deve ser feitos no intervalo <strong>A40:G60</strong> (configurável).</p>
 
     <div class="excel-wrap">
       <table class="exc-table">
@@ -1379,7 +1372,7 @@ dialog#keywatch-modal::backdrop {
             <td>A</td>
             <td>Carro</td>
             <td>Critério</td>
-            <td>Número do carro (ex: <code>1</code> ou <code>01</code>). Deixar vazio = aplica a todos.</td>
+            <td>Número do carro (ex: <code>1</code>). Deixar vazio = aplica a <strong>todos os carros</strong>.</td>
           </tr>
           <tr class="cat-crit">
             <td>B</td>
@@ -1403,7 +1396,7 @@ dialog#keywatch-modal::backdrop {
             <td>E</td>
             <td>Atividade</td>
             <td>Override</td>
-            <td>Código da atividade a usar no lugar do padrão (ex: <code>03</code>).</td>
+            <td>Código da atividade a usar no lugar do padrão (ex: <code>13</code>).</td>
           </tr>
           <tr class="cat-over">
             <td>F</td>
@@ -1415,14 +1408,14 @@ dialog#keywatch-modal::backdrop {
             <td>G</td>
             <td>Linha</td>
             <td>Override</td>
-            <td>Código de linha alternativo (preenche o campo COD_LINHA na saída).</td>
+            <td>Código de linha alternativo (usado somente quando a viagem é feita em outra linha).</td>
           </tr>
         </tbody>
       </table>
     </div>
 
     <h3>Exemplo</h3>
-    <p>Para que o carro 2, na viagem das 13:10 sentido I, use a atividade <code>03</code> e o local <code>99</code>:</p>
+    <p>Para que o carro 2, na viagem das 13:10 sentido I, use a atividade <code>22</code> e o local <code>99</code>:</p>
 
     <div class="excel-wrap">
       <table class="exc-table">
@@ -1435,9 +1428,9 @@ dialog#keywatch-modal::backdrop {
             <td>13:10</td>
             <td>I</td>
             <td>P</td>
-            <td>03</td>
+            <td>22</td>
             <td>99</td>
-            <td class="empty" style="color:var(--text-dim)">—</td>
+            <td class="empty" style="color:var(--text-dim)"></td>
           </tr>
         </tbody>
       </table>
@@ -1452,7 +1445,7 @@ dialog#keywatch-modal::backdrop {
   <!-- EXCEÇÕES DE TABELA -->
   <section class="section" id="excecoes-tabelas">
     <h2>Exceções de Tabela</h2>
-    <p>Permitem sobrescrever configurações de <strong>tabelas inteiras</strong> (nome, horários, tempos, saída de garagem). Ficam no intervalo <strong>L40:T60</strong>.</p>
+    <p>Permitem sobrescrever configurações referêntes a <strong>tabela</strong> (nome, horários, tempos, saída de garagem). Ficam no intervalo <strong>L40:T60</strong>.</p>
 
     <div class="excel-wrap">
       <table class="exc-table">
@@ -1460,6 +1453,7 @@ dialog#keywatch-modal::backdrop {
           <tr>
             <th>Coluna</th>
             <th>Campo</th>
+            <th>Tipo</th>
             <th>Exemplo</th>
             <th>Descrição</th>
           </tr>
@@ -1468,54 +1462,63 @@ dialog#keywatch-modal::backdrop {
           <tr>
             <td>L</td>
             <td>Tabela (chave)</td>
+            <td>Filtro</td>
             <td>01A</td>
             <td>Nome da tabela a sobrescrever (carro + letra, ex: <code>01A</code>, <code>02B</code>).</td>
           </tr>
           <tr>
             <td>M</td>
             <td>Nome</td>
+            <td>Override</td>
             <td>01Z</td>
             <td>Substitui o nome gerado automaticamente pelo engine.</td>
           </tr>
           <tr>
             <td>N</td>
             <td>Início</td>
+            <td>Override</td>
             <td>05:00</td>
             <td>Sobrescreve o horário de início da tabela (INICIO_SERVICO).</td>
           </tr>
           <tr>
             <td>O</td>
             <td>Fim</td>
+            <td>Override</td>
             <td>12:10</td>
             <td>Sobrescreve o horário de fim da tabela (FIM_SERVICO).</td>
           </tr>
           <tr>
             <td>P</td>
             <td>Período (Turno)</td>
+            <td>Override</td>
             <td>1</td>
             <td>Força o número do turno da tabela, ignorando o mapa automático.</td>
           </tr>
           <tr>
             <td>Q</td>
             <td>Saída Garagem</td>
+            <td>Override</td>
             <td>04:45</td>
             <td>Sobrescreve o horário de saída da garagem (SAIDA_GAR).</td>
           </tr>
           <tr>
             <td>R</td>
             <td>Preparo (min)</td>
+            <td>Override</td>
             <td>15</td>
             <td>Sobrescreve o tempo de preparo apenas para esta tabela.</td>
           </tr>
           <tr>
             <td>S</td>
             <td>Acesso (min)</td>
+            <td>Override</td>
             <td>20</td>
             <td>Sobrescreve o tempo de acesso apenas para esta tabela.</td>
           </tr>
           <tr>
             <td>T</td>
             <td>Recolhe (min)</td>
+            <td>Override</td>
             <td>25</td>
             <td>Sobrescreve o tempo de recolhe apenas para esta tabela.</td>
           </tr>
@@ -1527,12 +1530,16 @@ dialog#keywatch-modal::backdrop {
       <span class="callout-icon">💡</span>
       <div>A chave da tabela (coluna L) é formada pelo <strong>número do carro com 2 dígitos + letra</strong> (ex: <code>01A</code>, <code>03C</code>). A busca é feita sem distinção de maiúsculas/minúsculas.</div>
     </div>
+    <div class="callout tip">
+      <span class="callout-icon">💡</span>
+      <div>As letras usadas como base são <code>['A', 'B', 'D', 'E', 'F']</code> (seguindo a ordem) com excessão de carros vindos de um <strong>intervalo</strong>, neste caso tem sequencia própria <code>['C', 'V', 'X', 'Z']</code>, este padrão pode ser alterado no <code>settings.js</code>.</div>
+    </div>
   </section>
 
   <!-- LAYOUTS DE COLUNAS -->
   <section class="section" id="layouts-colunas">
     <h2>Layouts de Colunas (F11)</h2>
-    <p>O valor de <strong>F11</strong> define como a grade está organizada — quantas colunas cada carro ocupa e qual papel cada uma tem. Existem 4 layouts disponíveis:</p>
+    <p>O valor de <strong>F11</strong> define como a grade está organizada — quantas colunas cada carro ocupa e qual papel cada uma tem, ao alterar este valor, o grid sera ajustado para corresponder . Existem 4 layouts disponíveis:</p>
 
     <div class="layout-grid">
       <div class="layout-card">
@@ -1585,23 +1592,28 @@ dialog#keywatch-modal::backdrop {
       <span class="callout-icon">ℹ️</span>
       <div>Se a célula F11 estiver vazia ou com um valor não reconhecido, o engine usa automaticamente o <strong>Layout 1</strong> como padrão.</div>
     </div>
+    <div class="callout tip">
+      <span class="callout-icon">💡</span>
+      <div>Outros layouts podem ser criados e customizados pelo usuário, devendo neste caso ser informado no intervalo de <strong>D20:E26</strong> a quantidade de colunas e o padrão a ser usado. Além disso é necessário criar um padrão em <code>SETTINGS.layoutColunas</code>, detalhado melhor na seção <a href="#s-layout-colunas">Layouts de Colunas</a></div>
+    </div>
   </section>
 
   <!-- LINHA CIRCULAR -->
   <section class="section" id="linha-circular">
     <h2>Linha Circular (F10 = 1)</h2>
-    <p>Quando a linha é circular, os ônibus percorrem o trajeto completo em laço contínuo, sem distinguir Ida e Volta da mesma forma que uma linha convencional.</p>
+    <p>É possivel definir o Engine para funcionar com um padrão de linha circular, mudando ligeiramente o funcionamento. Os ônibus percorrem o trajeto completo em laço contínuo, sem distinguir Ida e Volta da mesma forma que uma linha convencional.</p>
+    <p>Recomenda-se usar padrão de duas colunas para carro, para permitir 1/2 meia viagem.</p>
 
     <h3>Comportamento</h3>
-    <p>Com <strong>F10 = 1</strong>, o engine ativa o modo circular com as seguintes regras:</p>
+    <p>Com <strong>F10 = 1 (ou sim, ou true)</strong>, o engine ativa o modo circular com as seguintes regras:</p>
 
     <div class="callout info">
-      <span class="callout-icon">🔄</span>
-      <div>
-        <strong>Viagem normal</strong> (só col Ida preenchida): sentido <code>C</code>, fim = próxima Ida.<br><br>
-        <strong>Meia viagem IDA</strong> (cols Ida <em>e</em> Volta preenchidas na mesma linha): o carro inicia no meio do percurso. Sentido conforme <code>circularMeiaViagemConsisteSentido</code>.<br><br>
-        <strong>Meia viagem VOLTA</strong> (só col Volta preenchida, logo após intervalo): o carro retoma no meio do percurso.
-      </div>
+      <span class="callout-icon">ℹ️</span>
+      <ul>
+        <li><strong>Viagem normal</strong> (só col Ida preenchida): Gera viagem com sentido <code>C</code>, fim = próxima viagem na coluna de IDA.<br></li>
+        <li><strong>Meia viagem IDA</strong> (cols Ida <em>e</em> Volta preenchidas na mesma linha): Neste caso Engine vai considerar como <strong>meia viagem</strong>, e finalizar a viagem no horário informado.<br></li>
+        <li><strong>Meia viagem VOLTA</strong> (col Volta preenchida, logo no inicio da tabela ou após um intervalo): Caso carro inicia no meio do percurso, Engine trata como <strong>meia viagem</strong> de volta.</li>
+      </ul>
     </div>
 
     <div class="callout tip">
@@ -1755,7 +1767,7 @@ dialog#keywatch-modal::backdrop {
         <div class="settings-card-left">
           <div>
             <div class="settings-key">mapaTurnos <span class="settings-type type-object">object</span></div>
-            <div class="settings-desc">Define o número do turno com base no horário de início da tabela.</div>
+            <div class="settings-desc">Define o turno a ser aplicado na tabela usando um horário de corte, aplicado na hora de início da tabela.</div>
           </div>
         </div>
       </div>
@@ -1826,6 +1838,7 @@ dialog#keywatch-modal::backdrop {
             <p>Entrada de encerramento da última tabela do carro.</p>
           </div>
         </div>
+        <p>Os nomes <code>[produtiva,intervalo,troca_turno,recolhe]</code> não devem ser alterados, apenas os codigos a serem usados</p>
         <p>Cada atividade pode ser sobrescrita por uma <strong>exceção de viagem</strong> (campo E da tabela de exceções).</p>
       </div>
     </div>
@@ -1839,7 +1852,7 @@ dialog#keywatch-modal::backdrop {
         <div class="settings-card-left">
           <div>
             <div class="settings-key">sequenciaNormal <span class="settings-type type-array">array</span></div>
-            <div class="settings-desc">Letras usadas para nomear tabelas em sequência normal.</div>
+            <div class="settings-desc">Letras usadas para nomear tabelas em sequência normal (inicio do carro ou troca de turno)</div>
           </div>
         </div>
       </div>
@@ -1847,9 +1860,23 @@ dialog#keywatch-modal::backdrop {
         <p>A primeira tabela de cada carro sempre recebe a primeira letra (<code>'A'</code>). As seguintes recebem a próxima letra disponível.</p>
         <div class="code-block">
 <span class="key">sequenciaNormal</span>:       [<span class="str">'A'</span>, <span class="str">'B'</span>, <span class="str">'D'</span>, <span class="str">'E'</span>, <span class="str">'F'</span>]<br>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-card">
+      <div class="settings-card-header">
+        <div class="settings-card-left">
+          <div>
+            <div class="settings-key">sequenciaPosIntervalo <span class="settings-type type-array">array</span></div>
+            <div class="settings-desc">Letras usadas para nomear tabelas vindas de um intervalo.</div>
+          </div>
+        </div>
+      </div>
+      <div class="settings-card-body">
+        <div class="code-block">
 <span class="key">sequenciaPosIntervalo</span>: [<span class="str">'C'</span>, <span class="str">'V'</span>, <span class="str">'X'</span>, <span class="str">'Z'</span>]
         </div>
-        <p>Tabelas abertas <strong>após um intervalo</strong> usam <code>sequenciaPosIntervalo</code>. Por exemplo: carro 01 com um intervalo geraria tabelas <code>01A</code> → <code>01C</code>.</p>
       </div>
     </div>
 
@@ -1902,6 +1929,12 @@ dialog#keywatch-modal::backdrop {
             </tbody>
           </table>
         </div>
+
+        <div class="callout tip">
+          <span class="callout-icon">💡</span>
+          <div>Após ajustar os campos do layout eh disponibilizado na interface principal o botão <strong class="mx-2 px-2 py-1 rounded btn-purple-matte">Ver schema</strong>, que exibe um modal com os ajustes atualizados. Útil para configurar o app que vai receber este arquivo (<strong>Globus</strong> por exemplo)</div>
+        </div>
+
       </div>
     </div>
 
@@ -1959,10 +1992,6 @@ dialog#keywatch-modal::backdrop {
 <span class="key">linhaSentido</span>:    <span class="num">2</span>,  <span class="cmt">// linha 2 = sentido (informativo)</span><br>
 <span class="key">linhaLocalidade</span>: <span class="num">3</span>,  <span class="cmt">// linha 3 = localidade por coluna</span><br><br>
 <span class="key">linhasTrocaTurno</span>: [<span class="num">34</span>, <span class="num">35</span>, <span class="num">36</span>],  <span class="cmt">// linhas Excel das TTs</span>
-        </div>
-        <div class="callout warning" style="margin-top:14px">
-          <span class="callout-icon">⚠️</span>
-          <div><code>linhaCarroID</code>, <code>linhaSentido</code> e <code>linhaLocalidade</code> são números de <strong>linha relativa dentro da grade</strong>, não linha do Excel. Linha 1 da grade = primeira linha do intervalo definido em <code>intervaloGeral</code>.</div>
         </div>
       </div>
     </div>
@@ -2071,8 +2100,8 @@ dialog#keywatch-modal::backdrop {
   </section>
 
   <footer class="footer">
-    <div>Sistema de Escalas de Transporte Urbano — Manual v5</div>
-    <div style="color: var(--text-dim)">engine.js · export.js · settings.js</div>
+    <div>Sistema Gerador de Arquivo de Importação de Planejamento — Manual V6</div>
+    <div>engine.js · export.js · settings.js</div>
   </footer>
 
 </main>
