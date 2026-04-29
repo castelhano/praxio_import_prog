@@ -163,7 +163,7 @@ const SETTINGS = {
 
     // ── Configuração da grade de viagens ──────────────────────────────────────
     viagensConf: {
-        intervaloGeral:           'I4:AV33',
+        intervaloGeral:           'I4:AZ33',
         intervaloExcecoesViagens: 'A40:G60',
         intervaloExcecoesTabelas: 'L40:T60',
 
